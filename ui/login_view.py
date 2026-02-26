@@ -1,57 +1,150 @@
+from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, messagebox
+
 from auth import AuthService
+from ui.styles import PALETTE
+
+
+class AdminAuthDialog(tk.Toplevel):
+    """
+    Ventana modal para autenticación de Admin/Doctor.
+    """
+    def __init__(self, parent, on_success_callback):
+        super().__init__(parent)
+        self.title("Acceso Administrativo")
+        self.resizable(False, False)
+        self.configure(bg=PALETTE["bg"])
+
+        self.auth = AuthService()
+        self.on_success = on_success_callback  # fn(role)
+
+        # Modal behavior
+        self.transient(parent)
+        self.grab_set()
+
+        self._build_ui()
+        self._center_over_parent(parent)
+
+        self.user_entry.focus_set()
+        self.bind("<Return>", lambda e: self._login())
+        self.bind("<Escape>", lambda e: self.destroy())
+
+    def _build_ui(self):
+        card = ttk.Frame(self, style="Surface.TFrame")
+        card.pack(fill="both", expand=True, padx=14, pady=14)
+
+        ttk.Label(card, text="Verificación de Credenciales", style="H2.TLabel",
+                  background=PALETTE["surface"]).pack(anchor="w", padx=14, pady=(14, 2))
+        ttk.Label(card, text="Ingresa el usuario admin y selecciona rol.", style="Muted.TLabel",
+                  background=PALETTE["surface"]).pack(anchor="w", padx=14, pady=(0, 12))
+
+        form = ttk.Frame(card, style="Surface.TFrame")
+        form.pack(fill="x", padx=14, pady=(0, 14))
+
+        ttk.Label(form, text="Usuario", background=PALETTE["surface"]).grid(row=0, column=0, sticky="w", pady=6)
+        self.user_entry = ttk.Entry(form, width=28)
+        self.user_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=6)
+
+        ttk.Label(form, text="Contraseña", background=PALETTE["surface"]).grid(row=1, column=0, sticky="w", pady=6)
+        self.pass_entry = ttk.Entry(form, show="•", width=28)
+        self.pass_entry.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=6)
+
+        ttk.Label(form, text="Rol", background=PALETTE["surface"]).grid(row=2, column=0, sticky="w", pady=6)
+        self.role_combo = ttk.Combobox(
+            form,
+            values=["Doctor", "Personal Administrativo"],
+            state="readonly",
+            width=26
+        )
+        self.role_combo.grid(row=2, column=1, sticky="ew", padx=(10, 0), pady=6)
+        self.role_combo.current(0)
+
+        form.grid_columnconfigure(1, weight=1)
+
+        actions = ttk.Frame(card, style="Surface.TFrame")
+        actions.pack(fill="x", padx=14, pady=(0, 14))
+
+        ttk.Button(actions, text="Cancelar", style="Ghost.TButton", command=self.destroy).pack(side="right")
+        ttk.Button(actions, text="Ingresar", style="Primary.TButton", command=self._login).pack(side="right", padx=(0, 10))
+
+        tip = "Tip: usuario: admin | contraseña: 1234"
+        ttk.Label(card, text=tip, style="Muted.TLabel", background=PALETTE["surface"]).pack(anchor="w", padx=14, pady=(0, 14))
+
+    def _login(self):
+        user = self.user_entry.get().strip()
+        pwd = self.pass_entry.get().strip()
+        role = self.role_combo.get().strip()
+
+        if self.auth.authenticate(user, pwd):
+            self.destroy()
+            self.on_success(role)
+        else:
+            messagebox.showerror("Acceso denegado", "Credenciales incorrectas.")
+
+    def _center_over_parent(self, parent):
+        self.update_idletasks()
+        pw = parent.winfo_width()
+        ph = parent.winfo_height()
+        px = parent.winfo_rootx()
+        py = parent.winfo_rooty()
+
+        w = self.winfo_width()
+        h = self.winfo_height()
+
+        x = px + (pw // 2) - (w // 2)
+        y = py + (ph // 2) - (h // 2)
+        self.geometry(f"+{x}+{y}")
 
 
 class LoginView(ttk.Frame):
     def __init__(self, parent, app_controller):
         super().__init__(parent)
         self.app = app_controller
-        self.auth = AuthService()
-
         self._build_ui()
 
-
-    # Contruccion de VISTA DE LOGIN
-    
     def _build_ui(self):
         self.pack(fill="both", expand=True)
 
-        container = ttk.Frame(self, padding=40)
-        container.place(relx=0.5, rely=0.5, anchor="center")
+        # Card centrada
+        card = ttk.Frame(self, style="Surface.TFrame")
+        card.place(relx=0.5, rely=0.5, anchor="center", width=560, height=360)
 
-        title = ttk.Label(container, text="MediLogic", font=("Segoe UI", 20, "bold"))
-        title.grid(row=0, column=0, columnspan=2, pady=10)
+        header = ttk.Frame(card, style="Surface.TFrame")
+        header.pack(fill="x", padx=22, pady=(18, 10))
 
-        ttk.Label(container, text="Usuario:").grid(row=1, column=0, sticky="w")
-        self.username = ttk.Entry(container)
-        self.username.grid(row=1, column=1, pady=5)
+        ttk.Label(header, text="MediLogic", style="Title.TLabel", background=PALETTE["surface"]).pack(anchor="w")
+        ttk.Label(header, text="Sistema experto • Interfaz clínica", style="Muted.TLabel",
+                  background=PALETTE["surface"]).pack(anchor="w", pady=(2, 0))
 
-        ttk.Label(container, text="Contraseña:").grid(row=2, column=0, sticky="w")
-        self.password = ttk.Entry(container, show="*")
-        self.password.grid(row=2, column=1, pady=5)
+        body = ttk.Frame(card, style="Surface.TFrame")
+        body.pack(fill="both", expand=True, padx=22, pady=10)
 
-        ttk.Label(container, text="Rol:").grid(row=3, column=0, sticky="w")
-        self.role = ttk.Combobox(
-            container,
-            values=["Doctor", "Personal Administrativo"],
-            state="readonly"
-        )
-        self.role.grid(row=3, column=1, pady=5)
-        self.role.current(0)
+        ttk.Label(body, text="Selecciona el modo de ingreso:", style="H3.TLabel",
+                  background=PALETTE["surface"]).pack(anchor="w", pady=(0, 10))
 
-        login_btn = ttk.Button(container, text="Ingresar como Admin", command=self.login)
-        login_btn.grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
+        ttk.Button(
+            body,
+            text="🧑‍🤝‍🧑 Entrar como Paciente",
+            style="Primary.TButton",
+            command=self.app.show_patient
+        ).pack(fill="x", pady=8)
 
-        patient_btn = ttk.Button(container, text="Ingresar como Paciente", command=self.app.show_patient)
-        patient_btn.grid(row=5, column=0, columnspan=2, pady=5, sticky="ew")
+        ttk.Button(
+            body,
+            text="🛡️ Entrar como Admin/Doctor",
+            style="Ghost.TButton",
+            command=self._open_admin_modal
+        ).pack(fill="x", pady=8)
 
-    def login(self):
-        user = self.username.get()
-        pwd = self.password.get()
-        role = self.role.get()
+        footer = ttk.Frame(card, style="Surface.TFrame")
+        footer.pack(fill="x", padx=22, pady=(0, 18))
+        ttk.Label(
+            footer,
+            text="El acceso administrativo requiere credenciales.",
+            style="Muted.TLabel",
+            background=PALETTE["surface"]
+        ).pack(anchor="w")
 
-        if self.auth.authenticate(user, pwd):
-            self.app.show_admin(role)
-        else:
-            messagebox.showerror("Error", "Credenciales incorrectas")
+    def _open_admin_modal(self):
+        AdminAuthDialog(self.app, on_success_callback=self.app.show_admin)

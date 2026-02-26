@@ -2,21 +2,21 @@ import os
 import tkinter as tk
 from tkinter import ttk
 
-
-#Inialiacion de prolog engine
 from backend.prolog_engine import PrologEngine
+from ui.styles import apply_hospital_theme
 from ui.login_view import LoginView
 from ui.patient_view import PatientView
 from ui.admin_view import AdminView
 
-#controla la navegacion entre vistas 
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-
         self.title("MediLogic - Sistema Experto")
-        self.geometry("1100x700")
+        self.geometry("1200x720")
+        self.minsize(1100, 680)
+
+        apply_hospital_theme(self)
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
         prolog_path = os.path.join(base_dir, "prolog", "medilogic.pl")
@@ -37,7 +37,7 @@ class App(tk.Tk):
 
     def show_patient(self):
         self.clear()
-        PatientView(self.container, self.engine)
+        PatientView(self.container, self.engine, app_controller=self)
 
     def show_admin(self, role):
         self.clear()
@@ -45,5 +45,4 @@ class App(tk.Tk):
 
 
 if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+    App().mainloop()
