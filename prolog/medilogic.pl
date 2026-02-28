@@ -99,7 +99,7 @@ contraindicado_condicion(ibuprofeno, insuficiencia_renal).
 contraindicado_condicion(ibuprofeno, gastritis_cronica).
 
 % ============================================================
-% SECCIÓN 5: UTILIDADES
+% UTILIDADES
 % ============================================================
 
 % Borra todos los datos del paciente actual de la memoria
@@ -116,3 +116,38 @@ multiplicador_severidad(severo,   3).
 
 % Lista todas las enfermedades registradas
 listar_enfermedades(E) :- enfermedad(E, _, _, _).
+
+
+% ============================================================
+% CÁLCULO DE AFINIDAD
+%   La afinidad mide qué tan probable es que el paciente
+%   tenga una enfermedad, en base a los síntomas que reportó.
+% ============================================================
+
+% Puntuación que aporta UN síntoma del paciente para una enfermedad
+puntuacion_componente(Enfermedad, Valor) :-
+    sintoma_paciente(Sintoma, Severidad),
+    tiene_sintoma(Enfermedad, Sintoma, Peso),
+    multiplicador_severidad(Severidad, Mult),
+    Valor is Peso * Mult.
+
+% Puntaje máximo posible (si todos los síntomas fueran "severo")
+puntaje_maximo(Enfermedad, Maximo) :-
+    findall(Peso, tiene_sintoma(Enfermedad, _, Peso), ListaPesos),
+    sum_list(ListaPesos, SumaBase),
+    Maximo is SumaBase * 3.
+
+% Puntaje real que obtuvo el paciente para una enfermedad
+puntaje_obtenido(Enfermedad, Puntaje) :-
+    findall(V, puntuacion_componente(Enfermedad, V), Valores),
+    sum_list(Valores, Puntaje).
+
+% Porcentaje de afinidad (0 a 100)
+porcentaje_afinidad(Enfermedad, Porcentaje) :-
+    puntaje_maximo(Enfermedad, Maximo),
+    puntaje_obtenido(Enfermedad, Obtenido),
+    ( Maximo =:= 0
+    -> Porcentaje is 0
+    ;  PReal is (Obtenido / Maximo) * 100,
+       round(PReal, Porcentaje)
+    ).
