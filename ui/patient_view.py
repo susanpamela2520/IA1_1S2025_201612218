@@ -155,17 +155,20 @@ class PatientView(ttk.Frame):
         allergies = self._get_selected(self.allergy_list)
         conditions = self._get_selected(self.cond_list)
 
-        self.engine.set_patient_profile(selected_symptoms, allergies, conditions)
-        results = self.engine.full_diagnosis()
+        # Carga el perfil del paciente en Prolog y ejecuta el diagnóstico
+        self.engine.cargar_perfil_paciente(selected_symptoms, allergies, conditions)
+        resultados = self.engine.diagnostico_completo()
 
+        # Limpia los resultados anteriores de la tabla
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        if not results:
+        if not resultados:
             messagebox.showinfo("Sin diagnóstico", "No se encontró afinidad con enfermedades registradas.")
             return
 
-        for r in results:
-            meds = ", ".join(r.safe_meds) if r.safe_meds else "Ninguno seguro"
-            expl = ", ".join(r.matched_symptoms) if r.matched_symptoms else "-"
-            self.tree.insert("", tk.END, values=(r.disease, r.affinity, r.urgency, meds, expl))
+        # Llena la tabla con los nuevos resultados
+        for r in resultados:
+            meds = ", ".join(r.medicamentos) if r.medicamentos else "Ninguno seguro"
+            expl = ", ".join(r.sintomas_coincidentes) if r.sintomas_coincidentes else "-"
+            self.tree.insert("", tk.END, values=(r.enfermedad, r.afinidad, r.urgencia, meds, expl))

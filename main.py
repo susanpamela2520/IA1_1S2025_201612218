@@ -44,5 +44,11 @@ class App(tk.Tk):
         AdminView(self.container, self, role)
 
 
+        # Lista enfermedades para ver si al menos disease/4 existe
+        diseases = list(self.prolog.query("current_predicate(disease/4)."))
+        if not diseases:
+            raise RuntimeError("No existe disease/4. Probablemente NO se cargó tu archivo medilogic.pl correcto.")
+
+
 if __name__ == "__main__":
     App().mainloop()
