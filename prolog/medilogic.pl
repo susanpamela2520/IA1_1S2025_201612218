@@ -1,9 +1,9 @@
 %   MediLogic — Base de Conocimiento en Prolog
 
 % ----------------------------------------------------------
-% SECCIÓN 0: Predicados dinámicos
-%   "Dinámico" significa que estos hechos se agregan y borran
-%   en tiempo de ejecución (desde Python) para cada paciente.
+% Aqui estan los Predicados dinámicos 
+% estos tiene la informacion dinamica que puede modificarse en la ejecución, como los síntomas actuales del paciente, alergias y condiciones crónicas.
+% desde Python para cada paciente.
 % ----------------------------------------------------------
 :- dynamic sintoma_paciente/2.    % sintoma_paciente(nombre_sintoma, severidad)
 :- dynamic alergia_paciente/1.    % alergia_paciente(nombre_alergia)
@@ -11,8 +11,8 @@
 
 
 % ============================================================
-% SECCIÓN 1: CATÁLOGO DE SÍNTOMAS
-%   Solo sirve como referencia/documentación.
+%  CATÁLOGO DE SÍNTOMAS
+%  Aqui se toma como referencia los sintomas
 % ============================================================
 sintoma(fiebre).
 sintoma(tos).
@@ -25,7 +25,7 @@ sintoma(nausea).
 
 
 % ============================================================
-% SECCIÓN 2: ENFERMEDADES
+% ENFERMEDADES
 %   enfermedad(Nombre, Descripcion, SistemaDelCuerpo, Tipo).
 % ============================================================
 enfermedad(gripe,
@@ -46,7 +46,7 @@ enfermedad(gastritis,
 
 
 % ============================================================
-% SECCIÓN 3: SÍNTOMAS POR ENFERMEDAD CON PESO
+% SÍNTOMAS POR ENFERMEDAD CON PESO
 %   tiene_sintoma(Enfermedad, Sintoma, Peso).
 %   Peso va de 1 (poco relevante) a 5 (muy relevante).
 % ============================================================
@@ -74,7 +74,7 @@ tiene_sintoma(gastritis, dolor_cabeza, 1).
 
 
 % ============================================================
-% SECCIÓN 4: MEDICAMENTOS
+% MEDICAMENTOS
 % ============================================================
 medicamento(paracetamol).
 medicamento(ibuprofeno).
