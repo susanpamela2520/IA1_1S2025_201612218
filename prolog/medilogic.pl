@@ -98,3 +98,21 @@ contraindicado_alergia(antihistaminico, alergia_antihistaminicos).
 contraindicado_condicion(ibuprofeno, insuficiencia_renal).
 contraindicado_condicion(ibuprofeno, gastritis_cronica).
 
+% ============================================================
+% SECCIÓN 5: UTILIDADES
+% ============================================================
+
+% Borra todos los datos del paciente actual de la memoria
+limpiar_paciente :-
+    retractall(sintoma_paciente(_, _)),
+    retractall(alergia_paciente(_)),
+    retractall(condicion_paciente(_)).
+
+% Convierte la severidad en un número multiplicador
+%   leve=1, moderado=2, severo=3
+multiplicador_severidad(leve,     1).
+multiplicador_severidad(moderado, 2).
+multiplicador_severidad(severo,   3).
+
+% Lista todas las enfermedades registradas
+listar_enfermedades(E) :- enfermedad(E, _, _, _).
