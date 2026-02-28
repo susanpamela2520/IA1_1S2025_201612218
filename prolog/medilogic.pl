@@ -151,3 +151,62 @@ porcentaje_afinidad(Enfermedad, Porcentaje) :-
     ;  PReal is (Obtenido / Maximo) * 100,
        round(PReal, Porcentaje)
     ).
+
+% ============================================================
+% SECCIÓN 7: NIVEL DE URGENCIA
+% ============================================================
+
+% ALTA: dolor de pecho severo con posible covid19
+nivel_urgencia(covid19, alta) :-
+    sintoma_paciente(dolor_pecho, severo).
+
+% MEDIA: afinidad >= 60%
+nivel_urgencia(Enfermedad, media) :-
+    porcentaje_afinidad(Enfermedad, P),
+    P >= 60.
+
+% BAJA: afinidad < 60%
+nivel_urgencia(Enfermedad, baja) :-
+    porcentaje_afinidad(Enfermedad, P),
+    P < 60.
+
+% ============================================================
+% SECCIÓN 8: MEDICAMENTO SEGURO
+% ============================================================
+
+% Inseguro si hay alergia que lo contraindica
+medicamento_inseguro(Med) :-
+    alergia_paciente(Alergia),
+    contraindicado_alergia(Med, Alergia).
+
+% Inseguro si hay condición crónica que lo contraindica
+medicamento_inseguro(Med) :-
+    condicion_paciente(Condicion),
+    contraindicado_condicion(Med, Condicion).
+
+% Seguro = trata la enfermedad Y no está contraindicado
+medicamento_seguro_para(Enfermedad, Med) :-
+    trata(Med, Enfermedad),
+    \+ medicamento_inseguro(Med).
+
+
+
+
+% ============================================================
+%  EXPLICACIÓN síntomas que coincidieron
+%   Para mostrarle al paciente por qué se sugirió la enfermedad
+% ============================================================
+sintomas_coincidentes(Enfermedad, Sintoma) :-
+    sintoma_paciente(Sintoma, _),
+    tiene_sintoma(Enfermedad, Sintoma, _).
+
+% ============================================================
+% DIAGNÓSTICO FINAL
+%   Regla principal que llama Python.
+%   diagnosticar(Enfermedad, Porcentaje, Urgencia)
+% ============================================================
+diagnosticar(Enfermedad, Porcentaje, Urgencia) :-
+    enfermedad(Enfermedad, _, _, _),
+    porcentaje_afinidad(Enfermedad, Porcentaje),
+    Porcentaje > 0,
+    nivel_urgencia(Enfermedad, Urgencia).
