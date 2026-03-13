@@ -57,4 +57,52 @@ def parsear_archivo(ruta:str) -> list:
     return bloques
 
 
+#Normalizacion de enfermedades
+
+def normalizar_enfermedad(bloque: dict) -> dict:
+    """Normaliza y valida los campos de un bloque."""
+    e = {
+        "nombre":      bloque.get("ENFERMEDAD", "").strip().lower().replace(" ", "_"),
+        "descripcion": bloque.get("DESCRIPCION", "Sin descripcion"),
+        "sistema":     bloque.get("SISTEMA", "respiratorio").strip().lower(),
+        "tipo":        bloque.get("TIPO", "viral").strip().lower(),
+        "sintomas":    [],
+        "medicamentos":[],
+        "contra_a":    [],
+        "contra_c":    [],
+    }
+
+#Sintomas: "fiebre: 5, tos:3"
+
+    sint_raw = bloque.get("SINTOMAS", "")
+    for par in sint_raw.split(","):
+        par = par.strip()
+        if ":" in par:
+            s, p = par.split(":", 1)
+            try:
+                e["sintomas"].append((s.strip(), int(p.strip())))
+            except ValueError:
+                pass
+        elif par:
+            e["sintomas"].append((par, 3))  # peso por defecto
+
+    # Medicamentos simples
+    meds_raw = bloque.get("MEDICAMENTOS", "")
+    e["medicamentos"] = [m.strip() for m in meds_raw.split(",") if m.strip()]
+
+        # Contraindicaciones
+    for par in bloque.get("CONTRA_ALERGIA", "").split(","):
+        par = par.strip()
+        if ":" in par:
+            m, a = par.split(":", 1)
+            e["contra_a"].append((m.strip(), a.strip()))
+
+    for par in bloque.get("CONTRA_CONDICION", "").split(","):
+        par = par.strip()
+        if ":" in par:
+            m, c = par.split(":", 1)
+            e["contra_c"].append((m.strip(), c.strip()))
+
+    return e
+
 
