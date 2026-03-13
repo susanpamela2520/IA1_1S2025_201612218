@@ -304,7 +304,7 @@ ef main():
     args = parser.parse_args()
 
     # Ruta al archivo .pl
-    pl_ruta = os.path.join(BASE_DIR, "knowledge", "medilogic.pl")
+    pl_ruta = os.path.join(BASE_DIR, "prolog", "medilogic.pl")
 
     print(f"\n{'='*60}")
     print(f"  MediLogic RPA — Iniciando carga masiva")
