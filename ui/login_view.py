@@ -7,9 +7,7 @@ from ui.styles import PALETTE
 
 
 class AdminAuthDialog(tk.Toplevel):
-    """
-    Ventana modal para autenticación de Admin/Doctor.
-    """
+    #Autenticacion de Administrador
     def __init__(self, parent, on_success_callback):
         super().__init__(parent)
         self.title("Acceso Administrativo")
@@ -125,14 +123,14 @@ class LoginView(ttk.Frame):
 
         ttk.Button(
             body,
-            text="🧑‍🤝‍🧑 Entrar como Paciente",
+            text=" Entrar como Paciente",
             style="Primary.TButton",
             command=self.app.show_patient
         ).pack(fill="x", pady=8)
 
         ttk.Button(
             body,
-            text="🛡️ Entrar como Admin/Doctor",
+            text=" Entrar como Admin/Doctor",
             style="Ghost.TButton",
             command=self._open_admin_modal
         ).pack(fill="x", pady=8)
@@ -145,6 +143,9 @@ class LoginView(ttk.Frame):
             style="Muted.TLabel",
             background=PALETTE["surface"]
         ).pack(anchor="w")
+        if hasattr(self.app, 'show_home'):
+            ttk.Button(footer, text="← Volver al inicio", style="Ghost.TButton",
+                       command=self.app.show_home).pack(anchor="w", pady=(8, 0))
 
     def _open_admin_modal(self):
         AdminAuthDialog(self.app, on_success_callback=self.app.show_admin)
