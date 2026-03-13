@@ -1,198 +1,531 @@
 from __future__ import annotations
 import tkinter as tk
-from tkinter import ttk
-from datetime import datetime
+from tkinter import ttk, messagebox, filedialog, simpledialog
+import os
 
+from backend.pl_manager import PLManager, Enfermedad, Medicamento, SISTEMAS, TIPOS
 from ui.styles import PALETTE
-
-# Chart (matplotlib embebido en Tkinter)
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 class AdminView(ttk.Frame):
-    def __init__(self, parent, app_controller, role: str):
+    def __init__(self, parent, engine, pl_ruta: str, app_controller=None):
         super().__init__(parent)
+        self.engine = engine
+        self.pl_ruta = pl_ruta
         self.app = app_controller
-        self.role = role
+        self.mgr = PLManager(pl_ruta)
         self._build_ui()
 
     def _build_ui(self):
         self.pack(fill="both", expand=True)
 
-        # Layout principal: Sidebar + Content
-        root = ttk.Frame(self)
-        root.pack(fill="both", expand=True, padx=14, pady=14)
-        root.grid_columnconfigure(1, weight=1)
-        root.grid_rowconfigure(0, weight=1)
+        # Topbar
+        top = ttk.Frame(self, style="Surface.TFrame")
+        top.pack(fill="x", padx=14, pady=14)
 
-        sidebar = ttk.Frame(root, style="Surface.TFrame")
-        sidebar.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
-        sidebar.configure(width=260)
-        sidebar.grid_propagate(False)
+        ttk.Label(top, text="Panel Administrativo", style="Title.TLabel",
+                  background=PALETTE["surface"]).pack(side="left", anchor="w")
+        ttk.Label(top, text="  •  Gestión de base de conocimiento médica",
+                  style="Muted.TLabel", background=PALETTE["surface"]).pack(side="left", anchor="w")
 
-        content = ttk.Frame(root)
-        content.grid(row=0, column=1, sticky="nsew")
-        content.grid_columnconfigure(0, weight=1)
-        content.grid_rowconfigure(2, weight=1)
+        btn_frame = ttk.Frame(top, style="Surface.TFrame")
+        btn_frame.pack(side="right")
+        if self.app:
+            ttk.Button(btn_frame, text="← Volver", style="Ghost.TButton",
+                       command=self.app.show_login).pack(side="right", padx=4)
+        ttk.Button(btn_frame, text="💾 Guardar y Recargar", style="Primary.TButton",
+                   command=self._guardar_y_recargar).pack(side="right", padx=4)
 
-        self._build_sidebar(sidebar)
-        self._build_content(content)
+        # Notebook
+        nb = ttk.Notebook(self)
+        nb.pack(fill="both", expand=True, padx=14, pady=(0, 14))
 
-    def _build_sidebar(self, sidebar: ttk.Frame):
-        header = ttk.Frame(sidebar, style="Surface.TFrame")
-        header.pack(fill="x", padx=14, pady=14)
+        self._tab_enfermedades(nb)
+        self._tab_medicamentos(nb)
+        self._tab_sintomas(nb)
+        self._tab_archivo(nb)
 
-        ttk.Label(header, text="MediLogic", style="H2.TLabel", background=PALETTE["surface"]).pack(anchor="w")
-        ttk.Label(header, text=f"Panel {self.role}", style="Muted.TLabel", background=PALETTE["surface"]).pack(anchor="w", pady=(2, 0))
+    # ----------------------------------------------------------------
+    #  TAB 1 — Enfermedades
+    # ----------------------------------------------------------------
+    def _tab_enfermedades(self, nb):
+        frame = ttk.Frame(nb)
+        nb.add(frame, text="🦠 Enfermedades")
+        frame.grid_columnconfigure(0, weight=2)
+        frame.grid_columnconfigure(1, weight=3)
+        frame.grid_rowconfigure(0, weight=1)
 
-        ttk.Separator(sidebar).pack(fill="x", padx=14, pady=10)
+        # Lista izquierda
+        left = ttk.Frame(frame, style="Surface.TFrame")
+        left.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
 
-        nav = ttk.Frame(sidebar, style="Surface.TFrame")
-        nav.pack(fill="both", expand=True, padx=14)
+        ttk.Label(left, text="Enfermedades registradas", style="H3.TLabel",
+                  background=PALETTE["surface"]).pack(anchor="w", padx=10, pady=(10,4))
 
-        def nav_btn(txt, cmd=None):
-            b = ttk.Button(nav, text=txt, style="Ghost.TButton", command=cmd)
-            b.pack(fill="x", pady=6)
-            return b
+        self.tree_enf = ttk.Treeview(left,
+                                      columns=("nombre","sistema","tipo"),
+                                      show="headings", height=16)
+        for c, t, w in [("nombre","Nombre",130),("sistema","Sistema",110),("tipo","Tipo",90)]:
+            self.tree_enf.heading(c, text=t)
+            self.tree_enf.column(c, width=w)
+        self.tree_enf.pack(fill="both", expand=True, padx=10, pady=(0,6))
+        self.tree_enf.bind("<<TreeviewSelect>>", self._on_select_enf)
 
-        nav_btn("📊 Dashboard", cmd=lambda: None)
+        btn_row = ttk.Frame(left, style="Surface.TFrame")
+        btn_row.pack(fill="x", padx=10, pady=(0,10))
+        ttk.Button(btn_row, text="+ Nueva", style="Primary.TButton",
+                   command=self._nueva_enfermedad).pack(side="left", padx=(0,4))
+        ttk.Button(btn_row, text="✏ Editar", style="Ghost.TButton",
+                   command=self._editar_enfermedad).pack(side="left", padx=(0,4))
+        ttk.Button(btn_row, text="🗑 Eliminar", style="Danger.TButton",
+                   command=self._eliminar_enfermedad).pack(side="left")
 
-        if self.role == "Doctor":
-            nav_btn("🩺 Diagnósticos")
-            nav_btn("📁 Historial clínico")
-            nav_btn("🧾 Reportes")
+        # Formulario derecha
+        right = ttk.Frame(frame, style="Surface.TFrame")
+        right.grid(row=0, column=1, sticky="nsew", padx=(5,10), pady=10)
+
+        ttk.Label(right, text="Detalle / Edición", style="H3.TLabel",
+                  background=PALETTE["surface"]).grid(row=0, column=0, columnspan=2,
+                  sticky="w", padx=12, pady=(12,8))
+
+        campos = [("Nombre:", "enf_nombre"), ("Descripción:", "enf_desc"),
+                  ("Sistema:", None),       ("Tipo:", None)]
+        self._enf_vars = {}
+        for i, (lbl, key) in enumerate(campos):
+            ttk.Label(right, text=lbl, background=PALETTE["surface"])\
+                .grid(row=i+1, column=0, sticky="w", padx=12, pady=4)
+            if key:
+                v = tk.StringVar()
+                self._enf_vars[key] = v
+                ttk.Entry(right, textvariable=v, width=30)\
+                    .grid(row=i+1, column=1, sticky="ew", padx=(0,12), pady=4)
+            elif lbl == "Sistema:":
+                v = tk.StringVar(value=SISTEMAS[0])
+                self._enf_vars["enf_sistema"] = v
+                ttk.Combobox(right, textvariable=v, values=SISTEMAS,
+                             state="readonly", width=28)\
+                    .grid(row=i+1, column=1, sticky="ew", padx=(0,12), pady=4)
+            else:
+                v = tk.StringVar(value=TIPOS[0])
+                self._enf_vars["enf_tipo"] = v
+                ttk.Combobox(right, textvariable=v, values=TIPOS,
+                             state="readonly", width=28)\
+                    .grid(row=i+1, column=1, sticky="ew", padx=(0,12), pady=4)
+
+        right.grid_columnconfigure(1, weight=1)
+
+        # Sub-tabla síntomas de la enfermedad
+        ttk.Label(right, text="Síntomas asociados (peso 1-5):", style="H3.TLabel",
+                  background=PALETTE["surface"])\
+            .grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(16,4))
+
+        self.tree_sint_enf = ttk.Treeview(right, columns=("sintoma","peso"),
+                                           show="headings", height=6)
+        self.tree_sint_enf.heading("sintoma", text="Síntoma")
+        self.tree_sint_enf.heading("peso",    text="Peso")
+        self.tree_sint_enf.column("sintoma", width=160)
+        self.tree_sint_enf.column("peso",    width=60)
+        self.tree_sint_enf.grid(row=7, column=0, columnspan=2,
+                                 sticky="nsew", padx=12, pady=(0,4))
+
+        sint_btn = ttk.Frame(right, style="Surface.TFrame")
+        sint_btn.grid(row=8, column=0, columnspan=2, sticky="w", padx=12, pady=(0,10))
+        ttk.Button(sint_btn, text="+ Agregar síntoma", style="Ghost.TButton",
+                   command=self._agregar_sintoma_enf).pack(side="left", padx=(0,4))
+        ttk.Button(sint_btn, text="🗑 Quitar", style="Danger.TButton",
+                   command=self._quitar_sintoma_enf).pack(side="left")
+
+        self._refresh_tree_enf()
+
+    def _refresh_tree_enf(self):
+        self.tree_enf.delete(*self.tree_enf.get_children())
+        for e in self.mgr.enfermedades.values():
+            self.tree_enf.insert("", tk.END, iid=e.nombre,
+                                  values=(e.nombre, e.sistema, e.tipo))
+
+    def _on_select_enf(self, _event=None):
+        sel = self.tree_enf.selection()
+        if not sel:
+            return
+        nombre = sel[0]
+        e = self.mgr.enfermedades.get(nombre)
+        if not e:
+            return
+        self._enf_vars["enf_nombre"].set(e.nombre)
+        self._enf_vars["enf_desc"].set(e.descripcion)
+        self._enf_vars["enf_sistema"].set(e.sistema)
+        self._enf_vars["enf_tipo"].set(e.tipo)
+        self.tree_sint_enf.delete(*self.tree_sint_enf.get_children())
+        for s, p in e.sintomas:
+            self.tree_sint_enf.insert("", tk.END, values=(s, p))
+
+    def _nueva_enfermedad(self):
+        for k, v in self._enf_vars.items():
+            v.set("" if "nombre" in k or "desc" in k else (SISTEMAS[0] if "sistema" in k else TIPOS[0]))
+        self.tree_sint_enf.delete(*self.tree_sint_enf.get_children())
+        self.tree_enf.selection_remove(*self.tree_enf.selection())
+
+    def _editar_enfermedad(self):
+        """Guarda los datos del formulario a la enfermedad seleccionada (o crea una nueva)."""
+        nombre = self._enf_vars["enf_nombre"].get().strip().lower().replace(" ", "_")
+        desc   = self._enf_vars["enf_desc"].get().strip()
+        sistema= self._enf_vars["enf_sistema"].get()
+        tipo   = self._enf_vars["enf_tipo"].get()
+
+        if not nombre:
+            messagebox.showwarning("Error", "El nombre no puede estar vacío.")
+            return
+
+        sintomas = []
+        for item in self.tree_sint_enf.get_children():
+            s, p = self.tree_sint_enf.item(item, "values")
+            sintomas.append((s, int(p)))
+
+        sel = self.tree_enf.selection()
+        nombre_viejo = sel[0] if sel else None
+
+        nueva = Enfermedad(nombre, desc, sistema, tipo, sintomas)
+        if nombre_viejo and nombre_viejo != nombre:
+            self.mgr.editar_enfermedad(nombre_viejo, nueva)
         else:
-            nav_btn("👤 Registrar paciente")
-            nav_btn("📅 Citas")
-            nav_btn("🧑‍💼 Usuarios")
+            self.mgr.agregar_enfermedad(nueva)
 
-        ttk.Separator(sidebar).pack(fill="x", padx=14, pady=10)
+        self._refresh_tree_enf()
+        messagebox.showinfo("Guardado", f"Enfermedad '{nombre}' guardada.\nPresiona '💾 Guardar y Recargar' para aplicar al motor.")
 
-        footer = ttk.Frame(sidebar, style="Surface.TFrame")
-        footer.pack(fill="x", padx=14, pady=14)
+    def _eliminar_enfermedad(self):
+        sel = self.tree_enf.selection()
+        if not sel:
+            messagebox.showwarning("Selecciona", "Selecciona una enfermedad.")
+            return
+        nombre = sel[0]
+        if messagebox.askyesno("Confirmar", f"¿Eliminar '{nombre}'?"):
+            self.mgr.eliminar_enfermedad(nombre)
+            self._refresh_tree_enf()
+            self.tree_sint_enf.delete(*self.tree_sint_enf.get_children())
 
-        ttk.Button(footer, text="Cerrar sesión", style="Primary.TButton", command=self.app.show_login).pack(fill="x")
+    def _agregar_sintoma_enf(self):
+        catalogo = self.mgr.sintomas_catalogo
+        dial = _SintomaDialog(self, catalogo)
+        self.wait_window(dial)
+        if dial.resultado:
+            s, p = dial.resultado
+            self.tree_sint_enf.insert("", tk.END, values=(s, p))
 
-    def _build_content(self, content: ttk.Frame):
-        # Top header
-        top = ttk.Frame(content, style="Surface.TFrame")
-        top.grid(row=0, column=0, sticky="ew")
-        top.grid_columnconfigure(0, weight=1)
+    def _quitar_sintoma_enf(self):
+        sel = self.tree_sint_enf.selection()
+        if sel:
+            self.tree_sint_enf.delete(sel[0])
 
-        left = ttk.Frame(top, style="Surface.TFrame")
-        left.grid(row=0, column=0, sticky="w", padx=14, pady=14)
+    # ----------------------------------------------------------------
+    #  TAB 2 — Medicamentos
+    # ----------------------------------------------------------------
+    def _tab_medicamentos(self, nb):
+        frame = ttk.Frame(nb)
+        nb.add(frame, text="💊 Medicamentos")
+        frame.grid_columnconfigure(0, weight=2)
+        frame.grid_columnconfigure(1, weight=3)
+        frame.grid_rowconfigure(0, weight=1)
 
-        ttk.Label(left, text="Dashboard", style="Title.TLabel", background=PALETTE["surface"]).pack(anchor="w")
-        ttk.Label(left, text=f"Resumen operativo • {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-                  style="Muted.TLabel", background=PALETTE["surface"]).pack(anchor="w", pady=(2, 0))
+        left = ttk.Frame(frame, style="Surface.TFrame")
+        left.grid(row=0, column=0, sticky="nsew", padx=(10,5), pady=10)
 
-        # KPI Cards row
-        kpi_row = ttk.Frame(content)
-        kpi_row.grid(row=1, column=0, sticky="ew", pady=12)
-        kpi_row.grid_columnconfigure((0, 1, 2, 3), weight=1)
+        ttk.Label(left, text="Medicamentos registrados", style="H3.TLabel",
+                  background=PALETTE["surface"]).pack(anchor="w", padx=10, pady=(10,4))
 
-        # Datos demo (luego los conectas a tus registros)
-        demo = self._get_demo_metrics()
+        self.tree_med = ttk.Treeview(left, columns=("nombre",), show="headings", height=16)
+        self.tree_med.heading("nombre", text="Medicamento")
+        self.tree_med.column("nombre", width=180)
+        self.tree_med.pack(fill="both", expand=True, padx=10, pady=(0,6))
+        self.tree_med.bind("<<TreeviewSelect>>", self._on_select_med)
 
-        self._kpi_card(kpi_row, 0, "Pacientes hoy", str(demo["patients_today"]), "success")
-        self._kpi_card(kpi_row, 1, "Diagnósticos", str(demo["diagnoses_today"]), "primary")
-        self._kpi_card(kpi_row, 2, "Urgencia alta", str(demo["high_urgency"]), "danger")
-        self._kpi_card(kpi_row, 3, "Citas pendientes", str(demo["pending_appointments"]), "warning")
+        btn_row = ttk.Frame(left, style="Surface.TFrame")
+        btn_row.pack(fill="x", padx=10, pady=(0,10))
+        ttk.Button(btn_row, text="+ Nuevo", style="Primary.TButton",
+                   command=self._nuevo_medicamento).pack(side="left", padx=(0,4))
+        ttk.Button(btn_row, text="💾 Guardar", style="Ghost.TButton",
+                   command=self._guardar_medicamento).pack(side="left", padx=(0,4))
+        ttk.Button(btn_row, text="🗑 Eliminar", style="Danger.TButton",
+                   command=self._eliminar_medicamento).pack(side="left")
 
-        # Main grid: Chart + Activity
-        main = ttk.Frame(content)
-        main.grid(row=2, column=0, sticky="nsew")
-        main.grid_columnconfigure(0, weight=2)
-        main.grid_columnconfigure(1, weight=1)
-        main.grid_rowconfigure(0, weight=1)
+        # Formulario
+        right = ttk.Frame(frame, style="Surface.TFrame")
+        right.grid(row=0, column=1, sticky="nsew", padx=(5,10), pady=10)
+        right.grid_columnconfigure(1, weight=1)
 
-        chart_card = ttk.Frame(main, style="Surface.TFrame")
-        chart_card.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        ttk.Label(right, text="Detalle del medicamento", style="H3.TLabel",
+                  background=PALETTE["surface"])\
+            .grid(row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(12,8))
 
-        right_card = ttk.Frame(main, style="Surface.TFrame")
-        right_card.grid(row=0, column=1, sticky="nsew")
+        self._med_nombre_var = tk.StringVar()
+        ttk.Label(right, text="Nombre:", background=PALETTE["surface"])\
+            .grid(row=1, column=0, sticky="w", padx=12, pady=4)
+        ttk.Entry(right, textvariable=self._med_nombre_var, width=28)\
+            .grid(row=1, column=1, sticky="ew", padx=(0,12), pady=4)
 
-        self._build_chart(chart_card, demo["weekly_series"])
-        self._build_activity(right_card, demo["recent_activity"])
+        # Trata
+        ttk.Label(right, text="Trata enfermedades:", style="H3.TLabel",
+                  background=PALETTE["surface"])\
+            .grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(12,4))
+        self.list_trata = tk.Listbox(right, selectmode=tk.MULTIPLE, height=5,
+                                      bd=1, highlightthickness=0)
+        self.list_trata.grid(row=3, column=0, columnspan=2, sticky="ew", padx=12, pady=(0,4))
 
-    def _kpi_card(self, parent, col, title, value, tone: str):
-        tones = {
-            "primary": PALETTE["primary"],
-            "success": PALETTE["success"],
-            "warning": PALETTE["warning"],
-            "danger": PALETTE["danger"],
-        }
-        accent = tones.get(tone, PALETTE["primary"])
+        # Contra-alergias
+        ttk.Label(right, text="Contraindicado con alergias:", style="H3.TLabel",
+                  background=PALETTE["surface"])\
+            .grid(row=4, column=0, columnspan=2, sticky="w", padx=12, pady=(12,4))
+        self._med_contra_a_var = tk.StringVar()
+        ttk.Entry(right, textvariable=self._med_contra_a_var, width=40)\
+            .grid(row=5, column=0, columnspan=2, sticky="ew", padx=12, pady=(0,4))
+        ttk.Label(right, text="(separar con comas)", style="Muted.TLabel",
+                  background=PALETTE["surface"])\
+            .grid(row=6, column=0, columnspan=2, sticky="w", padx=12)
 
-        card = ttk.Frame(parent, style="Surface.TFrame")
-        card.grid(row=0, column=col, sticky="ew", padx=6)
-        card.grid_columnconfigure(0, weight=1)
+        # Contra-condiciones
+        ttk.Label(right, text="Contraindicado con condiciones:", style="H3.TLabel",
+                  background=PALETTE["surface"])\
+            .grid(row=7, column=0, columnspan=2, sticky="w", padx=12, pady=(12,4))
+        self._med_contra_c_var = tk.StringVar()
+        ttk.Entry(right, textvariable=self._med_contra_c_var, width=40)\
+            .grid(row=8, column=0, columnspan=2, sticky="ew", padx=12, pady=(0,12))
+        ttk.Label(right, text="(separar con comas)", style="Muted.TLabel",
+                  background=PALETTE["surface"])\
+            .grid(row=9, column=0, columnspan=2, sticky="w", padx=12)
 
-        # “Accent bar” (frame de color)
-        bar = tk.Frame(card, bg=accent, height=5)
-        bar.grid(row=0, column=0, sticky="ew")
+        self._refresh_tree_med()
+        self._refresh_list_trata()
 
-        inner = ttk.Frame(card, style="Surface.TFrame")
-        inner.grid(row=1, column=0, sticky="nsew", padx=14, pady=14)
+    def _refresh_tree_med(self):
+        self.tree_med.delete(*self.tree_med.get_children())
+        for m in self.mgr.medicamentos.values():
+            self.tree_med.insert("", tk.END, iid=m.nombre, values=(m.nombre,))
 
-        ttk.Label(inner, text=title, style="Muted.TLabel", background=PALETTE["surface"]).pack(anchor="w")
-        ttk.Label(inner, text=value, font=("Segoe UI", 20, "bold"),
-                  background=PALETTE["surface"], foreground=PALETTE["text"]).pack(anchor="w", pady=(6, 0))
+    def _refresh_list_trata(self):
+        self.list_trata.delete(0, tk.END)
+        for e in self.mgr.enfermedades:
+            self.list_trata.insert(tk.END, e)
 
-    def _build_chart(self, parent: ttk.Frame, series):
-        ttk.Label(parent, text="Tendencia semanal", style="H2.TLabel", background=PALETTE["surface"]).pack(anchor="w", padx=14, pady=(14, 6))
-        ttk.Label(parent, text="Volumen de atenciones (demo)", style="Muted.TLabel",
-                  background=PALETTE["surface"]).pack(anchor="w", padx=14, pady=(0, 10))
+    def _on_select_med(self, _=None):
+        sel = self.tree_med.selection()
+        if not sel:
+            return
+        m = self.mgr.medicamentos.get(sel[0])
+        if not m:
+            return
+        self._med_nombre_var.set(m.nombre)
+        self._med_contra_a_var.set(", ".join(m.contra_alergia))
+        self._med_contra_c_var.set(", ".join(m.contra_condicion))
+        # Seleccionar enfermedades que trata
+        self.list_trata.selection_clear(0, tk.END)
+        for i in range(self.list_trata.size()):
+            if self.list_trata.get(i) in m.trata:
+                self.list_trata.selection_set(i)
 
-        fig = Figure(figsize=(6, 3), dpi=100)
-        ax = fig.add_subplot(111)
-        x = list(range(1, len(series) + 1))
-        ax.plot(x, series, marker="o")  # Sin colores forzados
-        ax.set_xlabel("Día")
-        ax.set_ylabel("Atenciones")
-        ax.grid(True, alpha=0.3)
+    def _nuevo_medicamento(self):
+        self._med_nombre_var.set("")
+        self._med_contra_a_var.set("")
+        self._med_contra_c_var.set("")
+        self.list_trata.selection_clear(0, tk.END)
+        self.tree_med.selection_remove(*self.tree_med.selection())
 
-        canvas = FigureCanvasTkAgg(fig, master=parent)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True, padx=14, pady=(0, 14))
+    def _guardar_medicamento(self):
+        nombre = self._med_nombre_var.get().strip().lower().replace(" ", "_")
+        if not nombre:
+            messagebox.showwarning("Error", "El nombre no puede estar vacío.")
+            return
+        trata  = [self.list_trata.get(i) for i in self.list_trata.curselection()]
+        ca = [x.strip() for x in self._med_contra_a_var.get().split(",") if x.strip()]
+        cc = [x.strip() for x in self._med_contra_c_var.get().split(",") if x.strip()]
 
-    def _build_activity(self, parent: ttk.Frame, rows):
-        ttk.Label(parent, text="Actividad reciente", style="H2.TLabel", background=PALETTE["surface"]).pack(anchor="w", padx=14, pady=(14, 6))
-        ttk.Label(parent, text="Últimos eventos (demo)", style="Muted.TLabel",
-                  background=PALETTE["surface"]).pack(anchor="w", padx=14, pady=(0, 10))
+        sel = self.tree_med.selection()
+        nombre_viejo = sel[0] if sel else None
+        nuevo = Medicamento(nombre, trata, ca, cc)
+        if nombre_viejo and nombre_viejo != nombre:
+            self.mgr.editar_medicamento(nombre_viejo, nuevo)
+        else:
+            self.mgr.agregar_medicamento(nuevo)
 
-        cols = ("hora", "evento", "estado")
-        tree = ttk.Treeview(parent, columns=cols, show="headings", height=10)
-        tree.heading("hora", text="Hora")
-        tree.heading("evento", text="Evento")
-        tree.heading("estado", text="Estado")
+        self._refresh_tree_med()
+        messagebox.showinfo("Guardado", f"Medicamento '{nombre}' guardado.")
 
-        tree.column("hora", width=70)
-        tree.column("evento", width=220)
-        tree.column("estado", width=90)
+    def _eliminar_medicamento(self):
+        sel = self.tree_med.selection()
+        if not sel:
+            messagebox.showwarning("Selecciona", "Selecciona un medicamento.")
+            return
+        nombre = sel[0]
+        if messagebox.askyesno("Confirmar", f"¿Eliminar '{nombre}'?"):
+            self.mgr.eliminar_medicamento(nombre)
+            self._refresh_tree_med()
 
-        for r in rows:
-            tree.insert("", tk.END, values=r)
+    # ----------------------------------------------------------------
+    #  TAB 3 — Catálogo de Síntomas
+    # ----------------------------------------------------------------
+    def _tab_sintomas(self, nb):
+        frame = ttk.Frame(nb)
+        nb.add(frame, text="🔬 Síntomas")
 
-        tree.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        card = ttk.Frame(frame, style="Surface.TFrame")
+        card.pack(fill="both", expand=True, padx=14, pady=14)
 
-    def _get_demo_metrics(self):
-        """
-        Datos demo del dashboard.
-        Luego puedes reemplazar con datos reales guardados (JSON/DB).
-        """
-        return {
-            "patients_today": 18,
-            "diagnoses_today": 25,
-            "high_urgency": 3,
-            "pending_appointments": 7,
-            "weekly_series": [12, 14, 11, 18, 20, 17, 22],
-            "recent_activity": [
-                ("08:10", "Paciente registrado", "OK"),
-                ("09:05", "Diagnóstico generado", "OK"),
-                ("10:22", "Cita creada", "OK"),
-                ("11:40", "Urgencia alta detectada", "ALERTA"),
-                ("13:15", "Reporte exportado", "OK"),
-            ],
-        }
+        ttk.Label(card, text="Catálogo de síntomas del sistema", style="H3.TLabel",
+                  background=PALETTE["surface"]).pack(anchor="w", padx=12, pady=(12,4))
+        ttk.Label(card,
+                  text="Estos síntomas aparecen en el módulo de pacientes como opciones de selección.",
+                  style="Muted.TLabel", background=PALETTE["surface"])\
+            .pack(anchor="w", padx=12, pady=(0,10))
+
+        self.list_sint_cat = tk.Listbox(card, height=14, bd=1, highlightthickness=0)
+        self.list_sint_cat.pack(fill="both", expand=True, padx=12, pady=(0,8))
+
+        row = ttk.Frame(card, style="Surface.TFrame")
+        row.pack(fill="x", padx=12, pady=(0,12))
+        self._sint_nuevo_var = tk.StringVar()
+        ttk.Entry(row, textvariable=self._sint_nuevo_var, width=22)\
+            .pack(side="left", padx=(0,6))
+        ttk.Button(row, text="+ Agregar", style="Primary.TButton",
+                   command=self._agregar_sint_cat).pack(side="left", padx=(0,4))
+        ttk.Button(row, text="🗑 Quitar seleccionado", style="Danger.TButton",
+                   command=self._quitar_sint_cat).pack(side="left")
+
+        self._refresh_list_sint_cat()
+
+    def _refresh_list_sint_cat(self):
+        self.list_sint_cat.delete(0, tk.END)
+        for s in sorted(self.mgr.sintomas_catalogo):
+            self.list_sint_cat.insert(tk.END, s)
+
+    def _agregar_sint_cat(self):
+        nombre = self._sint_nuevo_var.get().strip().lower().replace(" ", "_")
+        if not nombre:
+            return
+        self.mgr.agregar_sintoma_catalogo(nombre)
+        self._sint_nuevo_var.set("")
+        self._refresh_list_sint_cat()
+
+    def _quitar_sint_cat(self):
+        sel = self.list_sint_cat.curselection()
+        if not sel:
+            return
+        nombre = self.list_sint_cat.get(sel[0])
+        if messagebox.askyesno("Confirmar",
+                                f"¿Quitar '{nombre}' del catálogo?\n"
+                                "(se eliminará de todas las enfermedades)"):
+            self.mgr.eliminar_sintoma_catalogo(nombre)
+            self._refresh_list_sint_cat()
+
+    # ----------------------------------------------------------------
+    #  TAB 4 — Archivo .pl
+    # ----------------------------------------------------------------
+    def _tab_archivo(self, nb):
+        frame = ttk.Frame(nb)
+        nb.add(frame, text="📄 Archivo .pl")
+
+        card = ttk.Frame(frame, style="Surface.TFrame")
+        card.pack(fill="both", expand=True, padx=14, pady=14)
+
+        btn_row = ttk.Frame(card, style="Surface.TFrame")
+        btn_row.pack(fill="x", padx=12, pady=(12,8))
+        ttk.Button(btn_row, text="🔄 Refrescar vista", style="Ghost.TButton",
+                   command=self._refrescar_vista_pl).pack(side="left", padx=(0,6))
+        ttk.Button(btn_row, text="📥 Cargar .pl externo", style="Ghost.TButton",
+                   command=self._cargar_pl_externo).pack(side="left", padx=(0,6))
+        ttk.Button(btn_row, text="💾 Exportar copia", style="Ghost.TButton",
+                   command=self._exportar_pl).pack(side="left")
+
+        self.txt_pl = tk.Text(card, font=("Consolas", 9), wrap="none",
+                               bd=1, relief="solid")
+        scroll_y = ttk.Scrollbar(card, command=self.txt_pl.yview)
+        scroll_x = ttk.Scrollbar(card, orient="horizontal",
+                                  command=self.txt_pl.xview)
+        self.txt_pl.configure(yscrollcommand=scroll_y.set,
+                               xscrollcommand=scroll_x.set)
+
+        scroll_y.pack(side="right", fill="y")
+        scroll_x.pack(side="bottom", fill="x")
+        self.txt_pl.pack(fill="both", expand=True, padx=(12,0), pady=(0,12))
+        self._refrescar_vista_pl()
+
+    def _refrescar_vista_pl(self):
+        if os.path.exists(self.pl_ruta):
+            with open(self.pl_ruta, encoding="utf-8") as f:
+                contenido = f.read()
+            self.txt_pl.config(state="normal")
+            self.txt_pl.delete("1.0", tk.END)
+            self.txt_pl.insert("1.0", contenido)
+            self.txt_pl.config(state="disabled")
+
+    def _cargar_pl_externo(self):
+        ruta = filedialog.askopenfilename(
+            title="Seleccionar archivo .pl",
+            filetypes=[("Prolog files", "*.pl"), ("All files", "*.*")]
+        )
+        if not ruta:
+            return
+        import shutil
+        shutil.copy(ruta, self.pl_ruta)
+        self.mgr = PLManager(self.pl_ruta)
+        self._guardar_y_recargar(silent=True)
+        self._refresh_tree_enf()
+        self._refresh_tree_med()
+        self._refresh_list_sint_cat()
+        self._refresh_vista_pl()
+        messagebox.showinfo("Listo", "Archivo .pl cargado y motor recargado.")
+
+    def _exportar_pl(self):
+        ruta = filedialog.asksaveasfilename(
+            title="Exportar .pl",
+            defaultextension=".pl",
+            filetypes=[("Prolog files", "*.pl")]
+        )
+        if ruta:
+            import shutil
+            shutil.copy(self.pl_ruta, ruta)
+            messagebox.showinfo("Exportado", f"Archivo guardado en:\n{ruta}")
+
+    def _guardar_y_recargar(self, silent=False):
+        try:
+            self.mgr.guardar()
+            self.engine.recargar()
+            self._refrescar_vista_pl()
+            if not silent:
+                messagebox.showinfo("✅ Listo",
+                    "Base de conocimiento guardada y motor Prolog recargado.")
+        except Exception as ex:
+            messagebox.showerror("Error", f"No se pudo guardar/recargar:\n{ex}")
+
+
+# ----------------------------------------------------------------
+#  Diálogo auxiliar para agregar síntoma con peso
+# ----------------------------------------------------------------
+class _SintomaDialog(tk.Toplevel):
+    def __init__(self, parent, catalogo):
+        super().__init__(parent)
+        self.title("Agregar síntoma")
+        self.resizable(False, False)
+        self.resultado = None
+        self.transient(parent)
+        self.grab_set()
+
+        ttk.Label(self, text="Síntoma:").grid(row=0, column=0, padx=12, pady=8, sticky="w")
+        self._sint = tk.StringVar(value=catalogo[0] if catalogo else "")
+        ttk.Combobox(self, textvariable=self._sint, values=catalogo,
+                     state="readonly", width=22)\
+            .grid(row=0, column=1, padx=(0,12), pady=8)
+
+        ttk.Label(self, text="Peso (1-5):").grid(row=1, column=0, padx=12, sticky="w")
+        self._peso = tk.IntVar(value=3)
+        ttk.Spinbox(self, from_=1, to=5, textvariable=self._peso, width=8)\
+            .grid(row=1, column=1, padx=(0,12), pady=4, sticky="w")
+
+        btn = ttk.Frame(self)
+        btn.grid(row=2, column=0, columnspan=2, pady=12)
+        ttk.Button(btn, text="Agregar", style="Primary.TButton",
+                   command=self._ok).pack(side="left", padx=6)
+        ttk.Button(btn, text="Cancelar", style="Ghost.TButton",
+                   command=self.destroy).pack(side="left")
+
+    def _ok(self):
+        self.resultado = (self._sint.get(), self._peso.get())
+        self.destroy()
