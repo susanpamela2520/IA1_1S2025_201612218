@@ -1,152 +1,123 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple, Dict
 import os
 
 from pyswip import Prolog
 
-
 @dataclass
+
+#Agrupa la informacion que se le da al paciente
 class ResultadoDiagnostico:
-    """Agrupa todo lo que se le muestra al paciente sobre una enfermedad."""
     enfermedad: str
-    afinidad: int          # porcentaje 0-100
-    urgencia: str          # "alta", "media" o "baja"
-    medicamentos: List[str]
-    sintomas_coincidentes: List[str]
+    afinidad: int          # nivel de porcentaje de 0-100
+    urgencia: str          # alto,medio o bajo
+    medicamentos: List[str]  = field(default_factory=list)
+    sintomas_coincidentes: List[str]  = field(default_factory=list)
 
-
+# Aqui se hace el puente entre python y el medilogi.pl
 class PrologEngine:
-    """
-    Puente entre Python y el archivo medilogic.pl.
-    Carga la base de conocimiento y expone métodos para hacer consultas.
-    """
-
     def __init__(self, ruta_archivo: str):
         if not os.path.exists(ruta_archivo):
             raise FileNotFoundError(f"No se encontró el archivo Prolog: {ruta_archivo}")
-
+        self.ruta_archivo = ruta_archivo
         self.prolog = Prolog()
-        self.prolog.consult(ruta_archivo)
-
-        # Verificar que la regla principal existe en el archivo cargado
-        ok = list(self.prolog.query("current_predicate(diagnosticar/3)."))
+        self._cargar_archivo(ruta_archivo)
+    
+#Carga archivo de prolog
+    def _cargar_archivo(self, ruta: str) -> None:
+        ruta_abs = os.path.abspath(ruta).replace("\\", "/")  # Asegura formato correcto en Windows
+        self.prolog.consult(ruta_abs)
+        ok = list(self.prolog.query("current_predicate(enfermedad/4)."))
         if not ok:
-            raise RuntimeError(
-                "El archivo Prolog cargó pero no tiene la regla 'diagnosticar/3'. "
-                "Revisa que medilogic.pl esté completo."
-            )
+            raise RuntimeError(f"El archivo Prolog no se cargó correctamente o no define 'enfermedad/4'.")
 
-    # ----------------------------------------------------------
-    # MANEJO DEL PERFIL DEL PACIENTE
-    # ----------------------------------------------------------
+#Recarga el motor de prolog
+    def recargar(self) -> None:
+        self.prolog = Prolog()
+        self._cargar_archivo(self.ruta_archivo)
 
+#Borra los datos del paciente anterior    
     def limpiar_paciente(self) -> None:
-        """Borra los datos del paciente anterior de la memoria Prolog."""
         list(self.prolog.query("limpiar_paciente."))
 
-    def cargar_perfil_paciente(
-        self,
-        sintomas: List[Tuple[str, str]],   # [("fiebre","severo"), ("tos","leve"), ...]
-        alergias: List[str],               # ["alergia_aines", ...]
-        condiciones: List[str],            # ["insuficiencia_renal", ...]
-    ) -> None:
-        """
-        Registra en Prolog los datos del paciente actual.
-        Primero limpia cualquier dato previo.
-        """
+
+    def cargar_perfil_paciente(self,sintomas: List[Tuple[str, str]],   # [("fiebre","severo"), ("tos","leve"), ...]
+                               alergias: List[str],               # ["alergia_aines", ...] 
+                               condiciones: List[str],            # ["insuficiencia_renal", ...] 
+                               )  -> None:
+        
+        # Aqui se registra en Prolog los datos del paciente actual.
+        # y tambien se limpia primero cualquier dato previo.
         self.limpiar_paciente()
+        for s, severidad in sintomas:
+            list(self.prolog.query(f"assertz(sintoma_paciente({s}, {severidad}))."))
+        for a in alergias:
+            list(self.prolog.query(f"assertz(alergia_paciente({a}))."))
+        for c in condiciones:
+            list(self.prolog.query(f"assertz(condicion_paciente({c}))."))
 
-        for sintoma, severidad in sintomas:
-            list(self.prolog.query(f"assertz(sintoma_paciente({sintoma}, {severidad}))."))
+    
+    #QUERIES INDIVIDUALE 
+    #estas sirven para mostrar el razonamiento del sistema
 
-        for alergia in alergias:
-            list(self.prolog.query(f"assertz(alergia_paciente({alergia}))."))
-
-        for condicion in condiciones:
-            list(self.prolog.query(f"assertz(condicion_paciente({condicion}))."))
-
-    # ----------------------------------------------------------
-    # LAS 5 CONSULTAS (queries) AL MOTOR PROLOG
-    # ----------------------------------------------------------
-
+    #Query1: listar enfermedades registradas
+    #mostrar que conoce el sistema y que se puede diagnosticar
+   
     def q1_listar_enfermedades(self) -> List[str]:
-        """
-        QUERY 1: Devuelve la lista de enfermedades registradas en el sistema.
-        Útil para mostrar qué conoce el sistema.
-        """
-        resultados = [str(r["E"]) for r in self.prolog.query("listar_enfermedades(E).")]
-        return sorted(set(resultados))
+        return sorted(set(str(r["E"]) for r in self.prolog.query("listar_enfermedades(E).")))
 
+   #Query2: porcentaje de afinidad con todas las enfermedades
     def q2_afinidad_todas(self) -> Dict[str, int]:
-        """
-        QUERY 2: Calcula el porcentaje de afinidad del paciente actual
-        con TODAS las enfermedades (incluyendo las que tienen 0%).
-        """
-        resultado = {}
-        for r in self.prolog.query("enfermedad(E,_,_,_), porcentaje_afinidad(E,P)."):
-            resultado[str(r["E"])] = int(r["P"])
-        return resultado
-
+            return{str(r["E"]): int(r["P"])
+                for r in self.prolog.query("enfermedad(E,_,_,_), porcentaje_afinidad(E,P).")}  
+         
+    #Query3: diagnostica todas las enfermedades que tengan mayor a 0
     def q3_diagnosticar_todo(self) -> List[Tuple[str, int, str]]:
-        """
-        QUERY 3: Devuelve enfermedades con afinidad > 0, ordenadas de mayor a menor.
-        Cada elemento es (enfermedad, porcentaje, urgencia).
-        """
-        resultados = []
-        for r in self.prolog.query(
-            "enfermedad(E,_,_,_), porcentaje_afinidad(E,P), nivel_urgencia(E,U), P > 0."
-        ):
-            resultados.append((str(r["E"]), int(r["P"]), str(r["U"])))
-        resultados.sort(key=lambda x: x[1], reverse=True)
-        return resultados
+        out = []
+        vistos = set()
+        for r in self.prolog.query("diagnosticar(E, P, U)."):
+            e = str(r["E"])
+            if e not in vistos:
+                vistos.add(e)
+                out.append((e, int(r["P"]), str(r["U"])))
+        return sorted(out, key=lambda x: x[1], reverse=True)
 
+
+    #Query4: medicamentos seguros para una enfermedad dada
     def q4_medicamentos_seguros(self, enfermedad: str) -> List[str]:
-        """
-        QUERY 4: Devuelve medicamentos que tratan la enfermedad dada
-        y que NO están contraindicados para este paciente.
-        """
-        meds = [
-            str(r["M"])
-            for r in self.prolog.query(f"medicamento_seguro_para({enfermedad}, M).")
-        ]
-        return sorted(set(meds))
+        return sorted(set(str(r["M"]))
+                         for r in self.prolog.query(f"medicamento_seguro_para({enfermedad}, M)."))
 
+
+    #Query5: sintomas que coincidieron para una enfermedad dada
     def q5_sintomas_que_coincidieron(self, enfermedad: str) -> List[str]:
-        """
-        QUERY 5: Explica qué síntomas del paciente apuntaron a esta enfermedad.
-        Sirve para mostrar el razonamiento del sistema.
-        """
-        sintomas = [
-            str(r["S"])
-            for r in self.prolog.query(f"sintomas_coincidentes({enfermedad}, S).")
-        ]
-        return sorted(set(sintomas))
+       return sorted(set(str(r["S"])
+                            for r in self.prolog.query(f"sintomas_coincidentes({enfermedad}, S).")))           
 
-    # ----------------------------------------------------------
-    # DIAGNÓSTICO COMPLETO (llama las 5 queries)
-    # ----------------------------------------------------------
+
+    
+    #Parte de Diagnostico 
+    #aqui se hace el diagnostico completo 
+    #aqui se llaman las queries para tener la informacion 
 
     def diagnostico_completo(self) -> List[ResultadoDiagnostico]:
-        """
-        Ejecuta el diagnóstico completo y devuelve una lista de resultados
-        ordenados de mayor a menor afinidad, listos para mostrar en la UI.
-        """
-        candidatos = self.q3_diagnosticar_todo()
-        resultados = []
-
-        for enfermedad, porcentaje, urgencia in candidatos:
-            meds = self.q4_medicamentos_seguros(enfermedad)
-            coincidentes = self.q5_sintomas_que_coincidieron(enfermedad)
-
-            resultados.append(
-                ResultadoDiagnostico(
-                    enfermedad=enfermedad,
-                    afinidad=porcentaje,
-                    urgencia=urgencia,
-                    medicamentos=meds,
-                    sintomas_coincidentes=coincidentes,
-                )
+          return [
+            ResultadoDiagnostico(
+                enfermedad=e,
+                afinidad=p,
+                urgencia=u,
+                medicamentos=self.q4_medicamentos_seguros(e),
+                sintomas_coincidentes=self.q5_sintomas_que_coincidieron(e),
             )
+            for e, p, u in self.q3_diagnosticar_todo()
+        ]
+    
+    #Espacio para administracion
 
-        return resultados
+    def listar_medicamentos(self) -> List[str]:
+        return sorted(set(str(r["M"]) for r in self.prolog.query("medicamento(M).")))
+
+    def listar_sintomas_de(self, enfermedad: str) -> List[Tuple[str, int]]:
+        return sorted((str(r["S"]), int(r["P"]))
+                      for r in self.prolog.query(f"tiene_sintoma({enfermedad},S,P)."))

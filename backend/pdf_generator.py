@@ -1,14 +1,11 @@
-"""
-backend/pdf_generator.py
-Generador de informes PDF para MediLogic.
-Usa reportlab. Instalar: pip install reportlab
-"""
 from __future__ import annotations
 from typing import List
 import datetime
 
 from backend.prolog_engine import ResultadoDiagnostico
 
+
+#Aqui se generan los PDF con los resultados 
 # Colores del sistema
 COLOR_PRIMARY = (26/255, 115/255, 232/255)   # Azul
 COLOR_ALTA    = (234/255, 67/255, 53/255)    # Rojo
@@ -27,9 +24,8 @@ URGENCIA_COLOR = {
     "baja":  COLOR_BAJA,
 }
 
-
+#Aqui se genera el informe PDF con los resultados
 def generar_informe_pdf(resultados: List[ResultadoDiagnostico], ruta_salida: str) -> None:
-    """Genera el informe PDF con los resultados del diagnóstico."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import cm
@@ -49,7 +45,7 @@ def generar_informe_pdf(resultados: List[ResultadoDiagnostico], ruta_salida: str
     styles = getSampleStyleSheet()
     story = []
 
-    # ---- Encabezado ---------------------------------------------------
+    #encabezado para el PDF 
     estilo_titulo = ParagraphStyle(
         "titulo",
         parent=styles["Title"],
@@ -106,7 +102,7 @@ def generar_informe_pdf(resultados: List[ResultadoDiagnostico], ruta_salida: str
                        borderPad=6, leftIndent=6, rightIndent=6,
                        spaceAfter=12)))
 
-    # ---- Resumen de diagnósticos --------------------------------------
+    # Resumen del diagnostico
     story.append(Paragraph("Diagnósticos ordenados por afinidad", estilo_h2))
 
     resumen_data = [["#", "Enfermedad", "% Afinidad", "Urgencia"]]
@@ -143,7 +139,7 @@ def generar_informe_pdf(resultados: List[ResultadoDiagnostico], ruta_salida: str
     story.append(t)
     story.append(Spacer(1, 0.4*cm))
 
-    # ---- Detalle por enfermedad ---------------------------------------
+    # Detalle por la enfermedad
     story.append(Paragraph("Detalle de cada diagnóstico", estilo_h2))
 
     for i, r in enumerate(resultados):
@@ -186,7 +182,7 @@ def generar_informe_pdf(resultados: List[ResultadoDiagnostico], ruta_salida: str
         story.append(HRFlowable(width="100%", thickness=0.5,
                                   color=colors.HexColor("#DADCE0"), spaceAfter=4))
 
-    # ---- Pie de página ------------------------------------------------
+    # pie de pagina
     story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph(
         "MediLogic · Universidad San Carlos de Guatemala · Facultad de Ingeniería · IA1 2026",
