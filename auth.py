@@ -1,9 +1,10 @@
 class AuthService:
-    def __init__(self):
-      
-      #Aqui se realiza la utenticacion para ingresar como administrador
-        self.admin_user = "admin"
-        self.admin_password = "1234"
+    # Credenciales hardcodeadas para el prototipo académico
+    _USUARIOS = {
+        "admin": "1234",
+        "doctor": "medic2026",
+    }
 
-    def authenticate(self, username: str, password: str) -> bool:
-        return username == self.admin_user and password == self.admin_password
+    def authenticate(self, usuario: str, contrasena: str) -> bool:
+        """Retorna True si las credenciales son válidas."""
+        return self._USUARIOS.get(usuario.lower()) == contrasena
