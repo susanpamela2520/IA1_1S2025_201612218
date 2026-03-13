@@ -30,25 +30,15 @@ sintoma(diarrea).
 % ENFERMEDADES
 %   enfermedad(Nombre, Descripcion, SistemaDelCuerpo, Tipo).
 % ============================================================
-enfermedad(gripe,
-    "Infeccion viral comun con fiebre y malestar general.",
-    respiratorio, viral).
+enfermedad(gripe, 'Infeccion viral comun con fiebre y malestar general', respiratorio, viral).
 
-enfermedad(resfriado,
-    "Cuadro leve respiratorio con congestion y tos.",
-    respiratorio, viral).
+enfermedad(resfriado, 'Cuadro leve respiratorio con congestion y tos', respiratorio, viral).
 
-enfermedad(covid19,
-    "Infeccion viral respiratoria con fiebre, tos y fatiga.",
-    respiratorio, viral).
+enfermedad(covid19, 'Infeccion viral respiratoria con fiebre tos y fatiga', respiratorio, viral).
 
-enfermedad(gastritis,
-    "Inflamacion del estomago con nausea y malestar.",
-    digestivo, agudo).
+enfermedad(gastritis, 'Inflamacion del estomago con nausea y malestar', digestivo, agudo).
 
-enfermedad (sinusitis,
-    'Inflacion de los senos paranasales con congestion y presion facial'
-    respiratorio, bacteriano)
+enfermedad(sinusitis, 'Inflamacion de los senos paranasales con congestion y presion facial', respiratorio, bacteriano).
 
 % ============================================================
 % SÍNTOMAS POR ENFERMEDAD CON PESO
@@ -77,13 +67,13 @@ tiene_sintoma(gastritis, nausea,       5).
 tiene_sintoma(gastritis, fatiga,       2).
 tiene_sintoma(gastritis, dolor_cabeza, 1).
 tiene_sintoma(gastritis, vomito, 4).
-tiene_sintoma(gastritis, diarrea, 1)
+tiene_sintoma(gastritis, diarrea, 1).
 
-tiene_sintomas(sinusitis, congestion_nasal, 5)
-tiene_sintomas(sinusitis, dolor_cabeza, 4)
-tiene_sintomas(sinusitis, fiebre, 3)
-tiene_sintomas(sinusitis, dolor_garganta, 2)
-tiene_sintomas(sinusitis, fatiga, 2)
+tiene_sintoma(sinusitis, congestion_nasal, 5).
+tiene_sintoma(sinusitis, dolor_cabeza, 4).
+tiene_sintoma(sinusitis, fiebre, 3).
+tiene_sintoma(sinusitis, dolor_garganta, 2).
+tiene_sintoma(sinusitis, fatiga, 2).
 
 
 % ============================================================
@@ -156,7 +146,7 @@ listar_enfermedades(E) :- enfermedad(E, _, _, _).
 componente_puntaje(E, Valor) :-
     sintoma_paciente(S, Sev),
     tiene_sintoma(E, S, Peso),
-    multiplicador_sev(Sev, M),
+    multiplicador_severidad(Sev, M),
     Valor is Peso * M.
 
 % --- Puntaje máximo posible (suma pesos * 3 para severidad severo) ---
@@ -190,8 +180,7 @@ nivel_urgencia(E, alta) :-
 nivel_urgencia(E, media) :-
     porcentaje_afinidad(E, P),
     P >= 60,
-    \+ ( sintoma_paciente(dolor_pecho, severo),
-         enfermedad(E, _, respiratorio, _) ).
+    not((sintoma_paciente(dolor_pecho, severo), enfermedad(E, _, respiratorio, _))).
 
 % Baja: afinidad < 60%
 nivel_urgencia(E, baja) :-
@@ -210,7 +199,7 @@ medicamento_inseguro(M) :-
 % --- Medicamento seguro para una enfermedad ---
 medicamento_seguro_para(E, M) :-
     trata(M, E),
-    \+ medicamento_inseguro(M).
+    not(medicamento_inseguro(M)).
 
 % --- Síntomas que coincidieron (explicación del diagnóstico) ---
 sintomas_coincidentes(E, S) :-
@@ -224,4 +213,3 @@ diagnosticar(E, Porcentaje, Urgencia) :-
     porcentaje_afinidad(E, Porcentaje),
     Porcentaje > 0,
     nivel_urgencia(E, Urgencia).
-
