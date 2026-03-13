@@ -9,7 +9,7 @@ from ui.styles import aplicar_estilos, PALETTE
 
 
 class MediLogicApp(tk.Tk):
-    PL_PATH = os.path.join(BASE_DIR, "knowledge", "medilogic.pl")
+    PL_PATH = os.path.join(BASE_DIR, "prolog", "medilogic.pl")
 
     def __init__(self):
         super().__init__()
