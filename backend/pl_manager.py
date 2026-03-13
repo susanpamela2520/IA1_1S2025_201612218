@@ -255,9 +255,8 @@ diagnosticar(E, Porcentaje, Urgencia) :-
             if nombre in m.trata:
                 m.trata.remove(nombre)
 
-    # ------------------------------------------------------------------
+    
     #  Operaciones CRUD — Medicamentos
-    # ------------------------------------------------------------------
 
     def agregar_medicamento(self, m: Medicamento) -> None:
         self.medicamentos[m.nombre] = m
@@ -269,10 +268,8 @@ diagnosticar(E, Porcentaje, Urgencia) :-
     def eliminar_medicamento(self, nombre: str) -> None:
         self.medicamentos.pop(nombre, None)
 
-    # ------------------------------------------------------------------
     #  Catálogo de síntomas
-    # ------------------------------------------------------------------
-
+    
     def agregar_sintoma_catalogo(self, nombre: str) -> None:
         if nombre not in self.sintomas_catalogo:
             self.sintomas_catalogo.append(nombre)
