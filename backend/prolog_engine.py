@@ -15,6 +15,16 @@ class ResultadoDiagnostico:
     medicamentos: List[str]  = field(default_factory=list)
     sintomas_coincidentes: List[str]  = field(default_factory=list)
 
+
+#funcion que sirve para convertir el valor que retorne pyswip a un string 
+def atom(valor) -> str:
+    if isinstance (valor, (set, frozenset)):
+        return _atom(next(iter(valor))) if valor else ""
+    if isinstance(valor, bytes):
+        return valor.decode("utf-8")
+    return str(valor)
+
+
 # Aqui se hace el puente entre python y el medilogi.pl
 class PrologEngine:
     def __init__(self, ruta_archivo: str):
