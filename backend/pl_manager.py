@@ -1,14 +1,10 @@
-"""
-backend/pl_manager.py
-Gestor del archivo .pl — permite leer y escribir la base de conocimiento
-sin editar el archivo manualmente.
-Usado por el módulo Administrador.
-"""
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple
 import re, os, shutil, datetime
 
+#Aqui se gestiona el pl
+#Lee el archivo y escribe en la memoria sin editar manual
 
 @dataclass
 class Enfermedad:
@@ -17,7 +13,6 @@ class Enfermedad:
     sistema: str      # respiratorio | digestivo | endocrino | neurologico | inmunologico
     tipo: str         # viral | bacteriano | cronico | agudo | inmunologico
     sintomas: List[Tuple[str, int]] = field(default_factory=list)   # [(nombre, peso), ...]
-
 
 @dataclass
 class Medicamento:
@@ -36,17 +31,15 @@ SINTOMAS_CATALOGO = [
 ]
 
 
-class PLManager:
-    """
-    Lee el archivo .pl, mantiene los datos en memoria y puede reescribir
-    el archivo completo preservando la sección de reglas fijas.
-    """
+#Aqui se lee el archivo 
+#Se mantiene los datos en memoria
+#se sigue preservando la seccion de las reglas 
 
+class PLManager:
     # Sección de reglas de inferencia (no se toca, siempre se añade al final)
     REGLAS_FIJAS = """
-% =============================================================
-%  SECCIÓN 8 — REGLAS DE INFERENCIA (no modificar manualmente)
-% =============================================================
+
+%REGLAS DE INFERENCIA 
 
 limpiar_paciente :-
     retractall(sintoma_paciente(_, _)),
@@ -127,8 +120,9 @@ diagnosticar(E, Porcentaje, Urgencia) :-
         self.sintomas_catalogo: List[str] = list(SINTOMAS_CATALOGO)
         self._parsear()
 
+
     def _parsear(self) -> None:
-        """Lee el .pl actual y extrae enfermedades, síntomas y medicamentos."""
+       #Lee archivo .pl para tener las enfermedades     
         if not os.path.exists(self.ruta_pl):
             return
         with open(self.ruta_pl, encoding="utf-8") as f:
@@ -185,10 +179,8 @@ diagnosticar(E, Porcentaje, Urgencia) :-
 
         lineas = []
         lineas.append(
-            "% =============================================================\n"
             "%  MediLogic — Base de Conocimiento Médico (generado automáticamente)\n"
             f"%  Actualizado: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            "% =============================================================\n"
         )
 
         # Sección 1: Dinámicos
@@ -242,9 +234,7 @@ diagnosticar(E, Porcentaje, Urgencia) :-
         with open(self.ruta_pl, "w", encoding="utf-8") as f:
             f.writelines(lineas)
 
-    # ------------------------------------------------------------------
-    #  Operaciones CRUD — Enfermedades
-    # ------------------------------------------------------------------
+    # CRUD para enfermedades, medicamentos y síntomas del catálogo
 
     def agregar_enfermedad(self, e: Enfermedad) -> None:
         self.enfermedades[e.nombre] = e
