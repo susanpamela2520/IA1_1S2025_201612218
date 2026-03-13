@@ -1,0 +1,41 @@
+# ============================================================
+# Archivo de carga masiva para MediLogic RPA
+# Formato: CLAVE: valor
+# Separador entre enfermedades: ---
+# ============================================================
+
+ENFERMEDAD: neumonia
+DESCRIPCION: Infeccion que inflama los sacos aereos en uno o ambos pulmones
+SISTEMA: respiratorio
+TIPO: bacteriano
+SINTOMAS: fiebre:4, tos:5, dificultad_respirar:5, dolor_pecho:4, fatiga:3, escalofrios:3
+MEDICAMENTOS: amoxicilina, azitromicina, paracetamol
+CONTRA_ALERGIAS: amoxicilina:alergia_penicilina, azitromicina:alergia_macrolidos
+CONTRA_CONDICIONES: amoxicilina:insuficiencia_renal
+---
+ENFERMEDAD: sinusitis
+DESCRIPCION: Inflamacion de los senos paranasales que dificulta el drenaje de moco
+SISTEMA: respiratorio
+TIPO: bacteriano
+SINTOMAS: congestion_nasal:5, dolor_cabeza:4, dolor_facial:4, fiebre:2, fatiga:2, perdida_olfato:3
+MEDICAMENTOS: amoxicilina, paracetamol, loratadina
+CONTRA_ALERGIAS: amoxicilina:alergia_penicilina, loratadina:alergia_antihistaminicos
+CONTRA_CONDICIONES: amoxicilina:insuficiencia_renal
+---
+ENFERMEDAD: ulcera_peptica
+DESCRIPCION: Llaga dolorosa en el revestimiento del estomago o intestino delgado
+SISTEMA: digestivo
+TIPO: cronico
+SINTOMAS: ardor_estomago:5, dolor_abdominal:5, nausea:3, vomito:3, perdida_apetito:4
+MEDICAMENTOS: omeprazol, sucralfato, claritromicina
+CONTRA_ALERGIAS: claritromicina:alergia_macrolidos
+CONTRA_CONDICIONES: omeprazol:insuficiencia_hepatica
+---
+ENFERMEDAD: conjuntivitis
+DESCRIPCION: Inflamacion de la conjuntiva del ojo, puede ser viral, bacteriana o alergica
+SISTEMA: inmunologico
+TIPO: viral
+SINTOMAS: ojo_rojo:5, secrecion_ocular:5, picazon_ojos:4, lagrimeo:4, sensibilidad_luz:3
+MEDICAMENTOS: gotas_antibioticas, antihistaminico, suero_fisiologico
+CONTRA_ALERGIAS: antihistaminico:alergia_antihistaminicos
+CONTRA_CONDICIONES:

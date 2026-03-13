@@ -1,0 +1,34 @@
+# MediLogic RPA — Archivo de entrada de ejemplo
+# Formato: CLAVE: valor
+# Separar bloques con "---"
+# Líneas con # son comentarios y se ignoran
+
+ENFERMEDAD: bronquitis
+DESCRIPCION: Inflamacion de los bronquios con tos persistente y mucosidad
+SISTEMA: respiratorio
+TIPO: bacteriano
+SINTOMAS: tos:5, fiebre:3, fatiga:4, dolor_pecho:3, congestion_nasal:2
+MEDICAMENTOS: amoxicilina, ibuprofeno, paracetamol
+CONTRA_ALERGIA: amoxicilina:alergia_penicilina, ibuprofeno:alergia_aines
+CONTRA_CONDICION: ibuprofeno:insuficiencia_renal, ibuprofeno:gastritis_cronica
+---
+
+ENFERMEDAD: diabetes_tipo2
+DESCRIPCION: Enfermedad metabolica cronica con niveles elevados de glucosa
+SISTEMA: endocrino
+TIPO: cronico
+SINTOMAS: fatiga:5, nausea:3, dolor_cabeza:2
+MEDICAMENTOS: metformina
+CONTRA_ALERGIA:
+CONTRA_CONDICION: metformina:insuficiencia_renal
+---
+
+ENFERMEDAD: migrania
+DESCRIPCION: Cefalea intensa recurrente con sensibilidad a la luz y al sonido
+SISTEMA: neurologico
+TIPO: cronico
+SINTOMAS: dolor_cabeza:5, nausea:4, fatiga:3, vomito:3
+MEDICAMENTOS: ibuprofeno, paracetamol
+CONTRA_ALERGIA: ibuprofeno:alergia_aines
+CONTRA_CONDICION: ibuprofeno:insuficiencia_renal, ibuprofeno:gastritis_cronica
+---

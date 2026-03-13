@@ -13,6 +13,7 @@
 % ============================================================
 %  CATÁLOGO DE SÍNTOMAS
 %  Aqui se toma como referencia los sintomas
+%  Administrado por ADMIN
 % ============================================================
 sintoma(fiebre).
 sintoma(tos).
@@ -22,7 +23,8 @@ sintoma(dolor_cabeza).
 sintoma(dolor_pecho).
 sintoma(fatiga).
 sintoma(nausea).
-
+sintoma(vomito).
+sintoma(diarrea).
 
 % ============================================================
 % ENFERMEDADES
@@ -44,6 +46,9 @@ enfermedad(gastritis,
     "Inflamacion del estomago con nausea y malestar.",
     digestivo, agudo).
 
+enfermedad (sinusitis,
+    'Inflacion de los senos paranasales con congestion y presion facial'
+    respiratorio, bacteriano)
 
 % ============================================================
 % SÍNTOMAS POR ENFERMEDAD CON PESO
@@ -71,35 +76,62 @@ tiene_sintoma(covid19, dolor_cabeza,  3).
 tiene_sintoma(gastritis, nausea,       5).
 tiene_sintoma(gastritis, fatiga,       2).
 tiene_sintoma(gastritis, dolor_cabeza, 1).
+tiene_sintoma(gastritis, vomito, 4).
+tiene_sintoma(gastritis, diarrea, 1)
+
+tiene_sintomas(sinusitis, congestion_nasal, 5)
+tiene_sintomas(sinusitis, dolor_cabeza, 4)
+tiene_sintomas(sinusitis, fiebre, 3)
+tiene_sintomas(sinusitis, dolor_garganta, 2)
+tiene_sintomas(sinusitis, fatiga, 2)
 
 
 % ============================================================
 % MEDICAMENTOS
+% medicamentos (Nombre)
 % ============================================================
 medicamento(paracetamol).
 medicamento(ibuprofeno).
 medicamento(antihistaminico).
 medicamento(omeprazol).
+medicamento(amoxicilina).
+medicamento(azitromicina).
 
 % Qué enfermedad trata cada medicamento
+
 trata(paracetamol,     gripe).
 trata(paracetamol,     resfriado).
 trata(paracetamol,     covid19).
+trata(paracetamol,     sinusitis).
+
 trata(ibuprofeno,      gripe).
 trata(ibuprofeno,      resfriado).
+trata(ibuprofeno,      sinusitis).
+
 trata(antihistaminico, resfriado).
+trata(antihistaminico, sinusitis).
+
 trata(omeprazol,       gastritis).
 
-% Medicamentos que NO se deben usar si el paciente tiene cierta alergia
+trata(amoxicilina,  sinusitis).
+trata(azitromicina,    sinusitis).
+
+
+% Contraindicaciones ------------------------------------
+%  contraindicado_alergia(Medicamento, Alergia).
+%  contraindicado_condicion(Medicamento, Condicion).
+% -------------------------------------------------------
 contraindicado_alergia(ibuprofeno,      alergia_aines).
 contraindicado_alergia(antihistaminico, alergia_antihistaminicos).
+contraindicado_alergia(amoxicilina,     alergia_penicilina).
 
-% Medicamentos que NO se deben usar si el paciente tiene cierta condición crónica
 contraindicado_condicion(ibuprofeno, insuficiencia_renal).
 contraindicado_condicion(ibuprofeno, gastritis_cronica).
+contraindicado_condicion(omeprazol,  insuficiencia_hepatica).
+
 
 % ============================================================
-% UTILIDADES
+% UTILIDADES (Reglas de Inferencia)
 % ============================================================
 
 % Borra todos los datos del paciente actual de la memoria
@@ -108,7 +140,7 @@ limpiar_paciente :-
     retractall(alergia_paciente(_)),
     retractall(condicion_paciente(_)).
 
-% Convierte la severidad en un número multiplicador
+% multiplicador para la severidad
 %   leve=1, moderado=2, severo=3
 multiplicador_severidad(leve,     1).
 multiplicador_severidad(moderado, 2).
@@ -117,96 +149,79 @@ multiplicador_severidad(severo,   3).
 % Lista todas las enfermedades registradas
 listar_enfermedades(E) :- enfermedad(E, _, _, _).
 
+%**
 
-% ============================================================
-% CÁLCULO DE AFINIDAD
-%   La afinidad mide qué tan probable es que el paciente
-%   tenga una enfermedad, en base a los síntomas que reportó.
-% ============================================================
+% --- Componente de puntaje (un síntoma ingresado que coincide) ---
+%     componente_puntaje(Enfermedad, Valor)
+componente_puntaje(E, Valor) :-
+    sintoma_paciente(S, Sev),
+    tiene_sintoma(E, S, Peso),
+    multiplicador_sev(Sev, M),
+    Valor is Peso * M.
 
-% Puntuación que aporta UN síntoma del paciente para una enfermedad
-puntuacion_componente(Enfermedad, Valor) :-
-    sintoma_paciente(Sintoma, Severidad),
-    tiene_sintoma(Enfermedad, Sintoma, Peso),
-    multiplicador_severidad(Severidad, Mult),
-    Valor is Peso * Mult.
+% --- Puntaje máximo posible (suma pesos * 3 para severidad severo) ---
+puntaje_maximo(E, Max) :-
+    findall(P, tiene_sintoma(E, _, P), Pesos),
+    sum_list(Pesos, SumaPesos),
+    Max is SumaPesos * 3.
 
-% Puntaje máximo posible (si todos los síntomas fueran "severo")
-puntaje_maximo(Enfermedad, Maximo) :-
-    findall(Peso, tiene_sintoma(Enfermedad, _, Peso), ListaPesos),
-    sum_list(ListaPesos, SumaBase),
-    Maximo is SumaBase * 3.
-
-% Puntaje real que obtuvo el paciente para una enfermedad
-puntaje_obtenido(Enfermedad, Puntaje) :-
-    findall(V, puntuacion_componente(Enfermedad, V), Valores),
+% --- Puntaje obtenido con los síntomas del paciente ---
+puntaje_obtenido(E, Puntaje) :-
+    findall(V, componente_puntaje(E, V), Valores),
     sum_list(Valores, Puntaje).
 
-% Porcentaje de afinidad (0 a 100)
-porcentaje_afinidad(Enfermedad, Porcentaje) :-
-    puntaje_maximo(Enfermedad, Maximo),
-    puntaje_obtenido(Enfermedad, Obtenido),
-    ( Maximo =:= 0
+% --- Porcentaje de afinidad normalizado 0-100 ---
+porcentaje_afinidad(E, Porcentaje) :-
+    puntaje_maximo(E, Max),
+    puntaje_obtenido(E, Obtenido),
+    ( Max =:= 0
     -> Porcentaje is 0
-    ;  PReal is (Obtenido / Maximo) * 100,
-       round(PReal, Porcentaje)
+    ;  PorcentajeF is (Obtenido / Max) * 100,
+       round(PorcentajeF, Porcentaje)
     ).
 
-% ============================================================
-% SECCIÓN 7: NIVEL DE URGENCIA
-% ============================================================
+% --- Nivel de urgencia ---
+% Alta: dolor_pecho severo en enfermedad respiratoria
+nivel_urgencia(E, alta) :-
+    sintoma_paciente(dolor_pecho, severo),
+    enfermedad(E, _, respiratorio, _).
 
-% ALTA: dolor de pecho severo con posible covid19
-nivel_urgencia(covid19, alta) :-
-    sintoma_paciente(dolor_pecho, severo).
+% Media: afinidad >= 60%
+nivel_urgencia(E, media) :-
+    porcentaje_afinidad(E, P),
+    P >= 60,
+    \+ ( sintoma_paciente(dolor_pecho, severo),
+         enfermedad(E, _, respiratorio, _) ).
 
-% MEDIA: afinidad >= 60%
-nivel_urgencia(Enfermedad, media) :-
-    porcentaje_afinidad(Enfermedad, P),
-    P >= 60.
-
-% BAJA: afinidad < 60%
-nivel_urgencia(Enfermedad, baja) :-
-    porcentaje_afinidad(Enfermedad, P),
+% Baja: afinidad < 60%
+nivel_urgencia(E, baja) :-
+    porcentaje_afinidad(E, P),
     P < 60.
 
-% ============================================================
-% SECCIÓN 8: MEDICAMENTO SEGURO
-% ============================================================
+% --- Medicamento inseguro para el paciente actual ---
+medicamento_inseguro(M) :-
+    alergia_paciente(A),
+    contraindicado_alergia(M, A).
 
-% Inseguro si hay alergia que lo contraindica
-medicamento_inseguro(Med) :-
-    alergia_paciente(Alergia),
-    contraindicado_alergia(Med, Alergia).
+medicamento_inseguro(M) :-
+    condicion_paciente(C),
+    contraindicado_condicion(M, C).
 
-% Inseguro si hay condición crónica que lo contraindica
-medicamento_inseguro(Med) :-
-    condicion_paciente(Condicion),
-    contraindicado_condicion(Med, Condicion).
+% --- Medicamento seguro para una enfermedad ---
+medicamento_seguro_para(E, M) :-
+    trata(M, E),
+    \+ medicamento_inseguro(M).
 
-% Seguro = trata la enfermedad Y no está contraindicado
-medicamento_seguro_para(Enfermedad, Med) :-
-    trata(Med, Enfermedad),
-    \+ medicamento_inseguro(Med).
+% --- Síntomas que coincidieron (explicación del diagnóstico) ---
+sintomas_coincidentes(E, S) :-
+    sintoma_paciente(S, _),
+    tiene_sintoma(E, S, _).
 
-
-
-
-% ============================================================
-%  EXPLICACIÓN síntomas que coincidieron
-%   Para mostrarle al paciente por qué se sugirió la enfermedad
-% ============================================================
-sintomas_coincidentes(Enfermedad, Sintoma) :-
-    sintoma_paciente(Sintoma, _),
-    tiene_sintoma(Enfermedad, Sintoma, _).
-
-% ============================================================
-% DIAGNÓSTICO FINAL
-%   Regla principal que llama Python.
-%   diagnosticar(Enfermedad, Porcentaje, Urgencia)
-% ============================================================
-diagnosticar(Enfermedad, Porcentaje, Urgencia) :-
-    enfermedad(Enfermedad, _, _, _),
-    porcentaje_afinidad(Enfermedad, Porcentaje),
+% --- Regla principal de diagnóstico ---
+%     diagnosticar(Enfermedad, Porcentaje, Urgencia)
+diagnosticar(E, Porcentaje, Urgencia) :-
+    enfermedad(E, _, _, _),
+    porcentaje_afinidad(E, Porcentaje),
     Porcentaje > 0,
-    nivel_urgencia(Enfermedad, Urgencia).
+    nivel_urgencia(E, Urgencia).
+
