@@ -191,7 +191,8 @@ class AdminView(ttk.Frame):
             self.mgr.agregar_enfermedad(nueva)
 
         self._refresh_tree_enf()
-        messagebox.showinfo("Guardado", f"Enfermedad '{nombre}' guardada.\nPresiona '💾 Guardar y Recargar' para aplicar al motor.")
+        self._refresh_list_trata()
+        self._guardar_y_recargar()
 
     def _eliminar_enfermedad(self):
         sel = self.tree_enf.selection()
@@ -347,7 +348,7 @@ class AdminView(ttk.Frame):
             self.mgr.agregar_medicamento(nuevo)
 
         self._refresh_tree_med()
-        messagebox.showinfo("Guardado", f"Medicamento '{nombre}' guardado.")
+        self._guardar_y_recargar()
 
     def _eliminar_medicamento(self):
         sel = self.tree_med.selection()
@@ -470,7 +471,7 @@ class AdminView(ttk.Frame):
         self._refresh_tree_enf()
         self._refresh_tree_med()
         self._refresh_list_sint_cat()
-        self._refresh_vista_pl()
+        self._refrescar_vista_pl()
         messagebox.showinfo("Listo", "Archivo .pl cargado y motor recargado.")
 
     def _exportar_pl(self):
@@ -485,15 +486,27 @@ class AdminView(ttk.Frame):
             messagebox.showinfo("Exportado", f"Archivo guardado en:\n{ruta}")
 
     def _guardar_y_recargar(self, silent=False):
+        # Paso 1: escribir el archivo .pl
         try:
             self.mgr.guardar()
-            self.engine.recargar()
-            self._refrescar_vista_pl()
-            if not silent:
-                messagebox.showinfo("✅ Listo",
-                    "Base de conocimiento guardada y motor Prolog recargado.")
         except Exception as ex:
-            messagebox.showerror("Error", f"No se pudo guardar/recargar:\n{ex}")
+            messagebox.showerror("Error al escribir .pl",
+                f"No se pudo guardar el archivo:\n{ex}")
+            return
+        # Paso 2: recargar el motor Prolog
+        try:
+            self.engine.recargar()
+        except Exception as ex:
+            messagebox.showerror("Error al recargar Prolog",
+                f"El archivo se guardo pero Prolog reporto un error:\n{ex}\n\n"
+                f"Revisa la sintaxis en la pestana 'Archivo .pl'.")
+            self._refrescar_vista_pl()
+            return
+        # Todo OK
+        self._refrescar_vista_pl()
+        if not silent:
+            messagebox.showinfo("Listo",
+                "Base de conocimiento guardada y motor Prolog recargado.")
 
 
 # ----------------------------------------------------------------
