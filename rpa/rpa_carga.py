@@ -1,81 +1,67 @@
-#Aqui se carga masivamente las enfermedades
-#lee el archivo.txt con PyAutoGUI
-#Se llena el formulario 
-#Usa modulo admin y tambien manda el email a la bitacora
-
-import argparse, time, datetime, os, sys, smtplib
+import argparse
+import datetime
+import os
+import sys
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-try:
-    import pyautogui
-    PYAUTOGUI_OK = True
-except ImportError:
-    PYAUTOGUI_OK = False
-    print("Advertencia: PyAutoGUI no está instalado. La función de carga masiva no estará disponible.")
+# Agregar el directorio raiz al path para poder importar los modulos del proyecto
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
+from backend.pl_manager import PLManager, Enfermedad, Medicamento
 
-## Path al proyecto 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)   
+# Parsear el archivo TXT
+# Lee el archivo bloque por bloque separados por "---"
 
-#Contantest de tiempo 
-PAUSA_CLICK  = 0.4   # segundos entre clics
-PAUSA_ESCR   = 0.05  # pausa entre teclas escritas
-PAUSA_LARGA  = 1.0   # espera después de acciones lentas
-
-pyautogui.PAUSE        = PAUSA_CLICK  if PYAUTOGUI_OK else 0
-pyautogui.FAILSAFE     = True         if PYAUTOGUI_OK else False
-
-#Parseo del archivo de entrada
-
-def parsear_archivo(ruta:str) -> list:
+def parsear_archivo(ruta: str) -> list:
+    """Lee el archivo .txt y retorna lista de dicts con los datos de cada enfermedad."""
     if not os.path.exists(ruta):
-        raise FileNotFoundError(f"El archivo '{ruta}' no existe.")
+        raise FileNotFoundError(f"Archivo no encontrado: {ruta}")
 
     bloques = []
     bloque_actual = {}
 
-    with open(ruta, "r", encoding="utf-8") as f:
+    with open(ruta, encoding="utf-8") as f:
         for linea in f:
             linea = linea.strip()
+            # Ignorar comentarios y lineas vacias
             if not linea or linea.startswith("#"):
                 continue
+            # El separador "---" indica fin de un bloque
             if linea == "---":
                 if bloque_actual:
                     bloques.append(bloque_actual)
                     bloque_actual = {}
                 continue
+            # Separar clave: valor
             if ":" in linea:
                 clave, _, valor = linea.partition(":")
-                clave  = clave.strip().upper()
-                valor  = valor.strip()
-                bloque_actual[clave] = valor
-    if bloque_actual:  # último bloque sin "---"
+                bloque_actual[clave.strip().upper()] = valor.strip()
+
+    # Agregar ultimo bloque si no tenia "---" al final
+    if bloque_actual:
         bloques.append(bloque_actual)
 
     return bloques
 
 
-#Normalizacion de enfermedades
-
-def normalizar_enfermedad(bloque: dict) -> dict:
-    """Normaliza y valida los campos de un bloque."""
+def normalizar_bloque(bloque: dict) -> dict:
+    """Convierte un bloque raw del TXT a un dict con los campos normalizados."""
     e = {
-        "nombre":      bloque.get("ENFERMEDAD", "").strip().lower().replace(" ", "_"),
-        "descripcion": bloque.get("DESCRIPCION", "Sin descripcion"),
-        "sistema":     bloque.get("SISTEMA", "respiratorio").strip().lower(),
-        "tipo":        bloque.get("TIPO", "viral").strip().lower(),
-        "sintomas":    [],
-        "medicamentos":[],
-        "contra_a":    [],
-        "contra_c":    [],
+        "nombre":       bloque.get("ENFERMEDAD", "").strip().lower().replace(" ", "_"),
+        "descripcion":  bloque.get("DESCRIPCION", "Sin descripcion"),
+        "sistema":      bloque.get("SISTEMA", "respiratorio").strip().lower(),
+        "tipo":         bloque.get("TIPO", "viral").strip().lower(),
+        "sintomas":     [],
+        "medicamentos": [],
+        "contra_a":     [],  # contraindicaciones por alergia
+        "contra_c":     [],  # contraindicaciones por condicion
     }
 
-#Sintomas: "fiebre: 5, tos:3"
-
-    sint_raw = bloque.get("SINTOMAS", "")
-    for par in sint_raw.split(","):
+    # Parsear sintomas: "fiebre:5, tos:3" -> [("fiebre", 5), ("tos", 3)]
+    for par in bloque.get("SINTOMAS", "").split(","):
         par = par.strip()
         if ":" in par:
             s, p = par.split(":", 1)
@@ -86,44 +72,55 @@ def normalizar_enfermedad(bloque: dict) -> dict:
         elif par:
             e["sintomas"].append((par, 3))  # peso por defecto
 
-    # Medicamentos simples
-    meds_raw = bloque.get("MEDICAMENTOS", "")
-    e["medicamentos"] = [m.strip() for m in meds_raw.split(",") if m.strip()]
+    # Parsear medicamentos: "amoxicilina, paracetamol"
+    e["medicamentos"] = [m.strip() for m in bloque.get("MEDICAMENTOS", "").split(",") if m.strip()]
 
-        # Contraindicaciones
+    # Parsear contraindicaciones: "ibuprofeno:alergia_aines"
     for par in bloque.get("CONTRA_ALERGIA", "").split(","):
         par = par.strip()
         if ":" in par:
-            m, a = par.split(":", 1)
-            e["contra_a"].append((m.strip(), a.strip()))
+            med, alergia = par.split(":", 1)
+            e["contra_a"].append((med.strip(), alergia.strip()))
 
     for par in bloque.get("CONTRA_CONDICION", "").split(","):
         par = par.strip()
         if ":" in par:
-            m, c = par.split(":", 1)
-            e["contra_c"].append((m.strip(), c.strip()))
+            med, cond = par.split(":", 1)
+            e["contra_c"].append((med.strip(), cond.strip()))
 
     return e
 
-#Se carga directamente al PLManager 
-#localemnte 
-#puede dar la lista de registros
 
-def cargar_via_pl_manager(enfermedades: list, pl_ruta: str) -> list:
-    """
-    Método principal: carga las enfermedades directamente al PLManager,
-    sin necesidad de interfaz gráfica.
-    Retorna lista de registros de bitácora.
-    """
-    from backend.pl_manager import PLManager, Enfermedad, Medicamento
 
+# Cargar las enfermedades al PLManager y guardar el .pl
+# Este es el "backend del RPA" - no usa interfaz grafica
+
+def cargar_enfermedades(enfermedades: list, pl_ruta: str) -> list:
+    """
+    Carga las enfermedades directamente al PLManager.
+    Actualiza el archivo medilogic.pl sin abrir la interfaz grafica.
+    Retorna la bitacora de lo que hizo.
+    """
     mgr = PLManager(pl_ruta)
     bitacora = []
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    bitacora.append(f"{'='*60}")
+    bitacora.append(f"  MediLogic RPA - Inicio de carga")
+    bitacora.append(f"  Fecha y hora: {ts}")
+    bitacora.append(f"  Archivo .pl: {pl_ruta}")
+    bitacora.append(f"  Enfermedades a cargar: {len(enfermedades)}")
+    bitacora.append(f"{'='*60}")
+
+    cargadas = 0
+    errores = 0
+
     for e in enfermedades:
         try:
-            # Agregar enfermedad
+            if not e["nombre"]:
+                raise ValueError("Nombre de enfermedad vacio")
+
+            # Agregar la enfermedad al PLManager
             nueva = Enfermedad(
                 nombre=e["nombre"],
                 descripcion=e["descripcion"],
@@ -133,208 +130,154 @@ def cargar_via_pl_manager(enfermedades: list, pl_ruta: str) -> list:
             )
             mgr.agregar_enfermedad(nueva)
 
-            # Agregar / actualizar medicamentos
+            # Agregar o actualizar medicamentos asociados
             for nombre_med in e["medicamentos"]:
                 if nombre_med not in mgr.medicamentos:
                     mgr.agregar_medicamento(Medicamento(nombre_med))
-                mgr.medicamentos[nombre_med].trata.append(e["nombre"])
-                # Evitar duplicados
-                mgr.medicamentos[nombre_med].trata = list(
-                    set(mgr.medicamentos[nombre_med].trata)
-                )
+                # Asociar medicamento con la enfermedad
+                if e["nombre"] not in mgr.medicamentos[nombre_med].trata:
+                    mgr.medicamentos[nombre_med].trata.append(e["nombre"])
 
-            # Contraindicaciones alergia
+            # Agregar contraindicaciones por alergia
             for med_c, alergia in e["contra_a"]:
                 if med_c in mgr.medicamentos:
                     if alergia not in mgr.medicamentos[med_c].contra_alergia:
                         mgr.medicamentos[med_c].contra_alergia.append(alergia)
 
-            # Contraindicaciones condición
+            # Agregar contraindicaciones por condicion
             for med_c, cond in e["contra_c"]:
                 if med_c in mgr.medicamentos:
                     if cond not in mgr.medicamentos[med_c].contra_condicion:
                         mgr.medicamentos[med_c].contra_condicion.append(cond)
 
             registro = (
-                f"[OK]  {ts} | Enfermedad '{e['nombre']}' cargada | "
-                f"Sistema: {e['sistema']} | Tipo: {e['tipo']} | "
-                f"Síntomas: {len(e['sintomas'])} | "
-                f"Medicamentos: {', '.join(e['medicamentos']) or 'ninguno'}"
+                f"[OK]  {ts} | '{e['nombre']}' cargada | "
+                f"sistema={e['sistema']} | tipo={e['tipo']} | "
+                f"sintomas={len(e['sintomas'])} | "
+                f"medicamentos={', '.join(e['medicamentos']) or 'ninguno'}"
             )
             print(registro)
             bitacora.append(registro)
+            cargadas += 1
 
         except Exception as ex:
-            registro = f"[ERROR] {ts} | Enfermedad '{e['nombre']}': {ex}"
+            registro = f"[ERROR] {ts} | '{e.get('nombre', '?')}': {ex}"
             print(registro)
             bitacora.append(registro)
+            errores += 1
 
-    # Guardar el .pl actualizado
+    # Guardar el archivo .pl actualizado
     mgr.guardar()
-    fin = f"\n[FIN] {ts} | Total cargadas: {len(enfermedades)} | Archivo .pl actualizado."
-    print(fin)
-    bitacora.append(fin)
+
+    resumen = (
+        f"\n{'='*60}\n"
+        f"  RESUMEN FINAL\n"
+        f"  Enfermedades cargadas exitosamente: {cargadas}\n"
+        f"  Errores: {errores}\n"
+        f"  Archivo .pl actualizado: {pl_ruta}\n"
+        f"{'='*60}"
+    )
+    print(resumen)
+    bitacora.append(resumen)
 
     return bitacora
 
-#Carga por GUI con pyautogui
-
-def _localizar_o_error(imagen: str, timeout: int = 5) -> tuple:
-    """Espera hasta encontrar una imagen en pantalla."""
-    for _ in range(timeout * 2):
-        pos = pyautogui.locateCenterOnScreen(imagen, confidence=0.8)
-        if pos:
-            return pos
-        time.sleep(0.5)
-    raise RuntimeError(f"No se encontró elemento en pantalla: {imagen}")
 
 
-def cargar_via_gui(enfermedades: list) -> list:
-    """
-    Carga usando PyAutoGUI para interactuar con la aplicación en ejecución.
-    NOTA: La aplicación debe estar abierta y en la pantalla de Admin.
-    Esta función asume que la app está visible y el panel de Enfermedades activo.
-    """
-    if not PYAUTOGUI_OK:
-        print("[SIMULACIÓN] PyAutoGUI no disponible — ejecutando en modo simulación.")
-        return ["[SIMULACIÓN] Carga GUI simulada (PyAutoGUI no instalado)"]
+# Guardar bitacora como texto plano
 
-    bitacora = []
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def guardar_bitacora_local(bitacora: list) -> str:
+    """Guarda la bitacora en un archivo .txt con timestamp en el nombre."""
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    ruta = os.path.join(BASE_DIR, f"rpa_bitacora_{ts}.txt")
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write("\n".join(bitacora))
+    print(f"\n[LOG] Bitacora guardada en: {ruta}")
+    return ruta
 
-    for e in enfermedades:
-        try:
-            print(f"[RPA] Procesando: {e['nombre']}")
+# Enviar bitacora por correo (opcional)
+# Requiere Gmail App Password: myaccount.google.com/apppasswords
 
-            # Clic en botón "+ Nueva" de la pestaña Enfermedades
-            pyautogui.hotkey("alt", "tab")  # traer la app al frente
-            time.sleep(PAUSA_LARGA)
-
-            # Buscar y hacer clic en campo "Nombre"
-            # (posición relativa al centro de la pantalla — ajustar si es necesario)
-            w, h = pyautogui.size()
-            campo_nombre_x = int(w * 0.60)
-            campo_nombre_y = int(h * 0.35)
-
-            # Limpiar y escribir nombre
-            pyautogui.click(campo_nombre_x, campo_nombre_y)
-            pyautogui.hotkey("ctrl", "a")
-            pyautogui.typewrite(e["nombre"], interval=PAUSA_ESCR)
-            time.sleep(PAUSA_CLICK)
-
-            # Descripción
-            pyautogui.press("tab")
-            pyautogui.hotkey("ctrl", "a")
-            pyautogui.typewrite(e["descripcion"][:80], interval=PAUSA_ESCR)
-
-            registro = f"[RPA-GUI] {ts} | '{e['nombre']}' ingresado por GUI"
-            print(registro)
-            bitacora.append(registro)
-
-        except Exception as ex:
-            registro = f"[RPA-ERROR] {ts} | '{e['nombre']}': {ex}"
-            print(registro)
-            bitacora.append(registro)
-
-    return bitacora
-
-    #Envio de email
-
-def enviar_email_bitacora(
-    bitacora: list,
-    destinatario: str,
-    smtp_host: str = "smtp.gmail.com",
-    smtp_port: int = 587,
-    remitente: str = "",
-    contrasena: str = "",
-) -> None:
-    """
-    Envía la bitácora de cambios por correo electrónico.
-    Para Gmail necesitas una "App Password" (no la contraseña normal).
-    """
-    if not remitente or not contrasena:
-        print("[EMAIL] Credenciales SMTP no configuradas. Guardando bitácora local.")
-        _guardar_bitacora_local(bitacora)
-        return
-
-    asunto = f"MediLogic RPA — Bitácora de carga {datetime.date.today()}"
+def enviar_email(bitacora: list, destinatario: str,
+                 smtp_user: str, smtp_pass: str) -> None:
+    """Envia la bitacora por correo electronico al administrador."""
+    asunto = f"MediLogic RPA - Bitacora de carga {datetime.date.today()}"
     cuerpo  = "\n".join(bitacora)
 
     msg = MIMEMultipart()
-    msg["From"]    = remitente
+    msg["From"]    = smtp_user
     msg["To"]      = destinatario
     msg["Subject"] = asunto
     msg.attach(MIMEText(cuerpo, "plain", "utf-8"))
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
             server.ehlo()
             server.starttls()
-            server.login(remitente, contrasena)
-            server.sendmail(remitente, destinatario, msg.as_string())
-        print(f"[EMAIL] Bitácora enviada a {destinatario}")
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, destinatario, msg.as_string())
+        print(f"[EMAIL] Bitacora enviada correctamente a: {destinatario}")
     except Exception as ex:
-        print(f"[EMAIL-ERROR] No se pudo enviar email: {ex}")
-        _guardar_bitacora_local(bitacora)
+        print(f"[EMAIL-ERROR] No se pudo enviar: {ex}")
+        print("[EMAIL] Guardando bitacora localmente...")
+        guardar_bitacora_local(bitacora)
 
-
-def _guardar_bitacora_local(bitacora: list) -> None:
-    ts  = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    ruta = os.path.join(BASE_DIR, f"rpa_bitacora_{ts}.txt")
-    with open(ruta, "w", encoding="utf-8") as f:
-        f.write("\n".join(bitacora))
-    print(f"[LOG] Bitácora guardada en: {ruta}")
-
-
-    #Ejecutado linea de comandos 
-
+#Entrada RPA
 
 def main():
-    parser = argparse.ArgumentParser(description="MediLogic RPA — Carga masiva de enfermedades")
-    parser.add_argument("--archivo", default="rpa/input_ejemplo.txt",
-                        help="Ruta al archivo .txt con las enfermedades a cargar")
-    parser.add_argument("--email",   default="",
-                        help="Email destinatario de la bitácora")
-    parser.add_argument("--smtp_user", default="",
-                        help="Usuario/email SMTP para enviar la bitácora")
-    parser.add_argument("--smtp_pass", default="",
-                        help="Contraseña SMTP (App Password para Gmail)")
-    parser.add_argument("--gui",    action="store_true",
-                        help="Usar PyAutoGUI para llenar la interfaz gráfica")
+    parser = argparse.ArgumentParser(
+        description="MediLogic RPA - Carga masiva de enfermedades desde archivo TXT"
+    )
+    parser.add_argument(
+        "--archivo",
+        default=os.path.join(os.path.dirname(__file__), "input_ejemplo.txt"),
+        help="Ruta al archivo .txt con las enfermedades a cargar"
+    )
+    parser.add_argument(
+        "--email",
+        default="",
+        help="Email destinatario para enviar la bitacora"
+    )
+    parser.add_argument(
+        "--smtp_user",
+        default="",
+        help="Tu correo Gmail para enviar la bitacora"
+    )
+    parser.add_argument(
+        "--smtp_pass",
+        default="",
+        help="App Password de Gmail (no la contrasena normal)"
+    )
     args = parser.parse_args()
 
-    # Ruta al archivo .pl
+    # Ruta al archivo .pl del proyecto
     pl_ruta = os.path.join(BASE_DIR, "prolog", "medilogic.pl")
 
     print(f"\n{'='*60}")
-    print(f"  MediLogic RPA — Iniciando carga masiva")
-    print(f"  Archivo: {args.archivo}")
-    print(f"  Modo:    {'GUI (PyAutoGUI)' if args.gui else 'Directo (PLManager)'}")
+    print(f"  MediLogic RPA - Iniciando")
+    print(f"  Archivo de entrada: {args.archivo}")
+    print(f"  Archivo .pl destino: {pl_ruta}")
     print(f"{'='*60}\n")
 
-    # 1. Parsear archivo
-    bloques_raw = parsear_archivo(args.archivo)
-    enfermedades = [normalizar_enfermedad(b) for b in bloques_raw]
-    print(f"[INFO] Se encontraron {len(enfermedades)} enfermedad(es) para cargar.\n")
+    # Paso 1: Leer y parsear el archivo TXT
+    print("[PASO 1] Leyendo archivo de entrada...")
+    bloques_raw   = parsear_archivo(args.archivo)
+    enfermedades  = [normalizar_bloque(b) for b in bloques_raw]
+    print(f"         Se encontraron {len(enfermedades)} enfermedad(es) para cargar.\n")
 
-    # 2. Cargar
-    if args.gui:
-        bitacora = cargar_via_gui(enfermedades)
+    # Paso 2: Cargar al PLManager y guardar el .pl
+    print("[PASO 2] Cargando enfermedades al sistema...")
+    bitacora = cargar_enfermedades(enfermedades, pl_ruta)
+
+    # Paso 3: Guardar bitacora local o enviar por email
+    if args.email and args.smtp_user and args.smtp_pass:
+        print(f"\n[PASO 3] Enviando bitacora por correo a {args.email}...")
+        enviar_email(bitacora, args.email, args.smtp_user, args.smtp_pass)
     else:
-        bitacora = cargar_via_pl_manager(enfermedades, pl_ruta)
+        print("\n[PASO 3] Guardando bitacora como archivo de texto...")
+        guardar_bitacora_local(bitacora)
 
-    # 3. Enviar email / guardar bitácora
-    if args.email:
-        enviar_email_bitacora(
-            bitacora,
-            destinatario=args.email,
-            remitente=args.smtp_user,
-            contrasena=args.smtp_pass,
-        )
-    else:
-        _guardar_bitacora_local(bitacora)
-
-    print("\n[RPA] Proceso finalizado.")
+    print("\n[RPA] Proceso finalizado exitosamente.")
 
 
 if __name__ == "__main__":
