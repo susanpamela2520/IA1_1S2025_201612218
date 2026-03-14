@@ -1,5 +1,5 @@
 %  MediLogic — Base de Conocimiento Médico (generado automáticamente)
-%  Actualizado: 2026-03-13 19:25:43
+%  Actualizado: 2026-03-13 19:40:36
 
 :- dynamic sintoma_paciente/2.
 :- dynamic alergia_paciente/1.
