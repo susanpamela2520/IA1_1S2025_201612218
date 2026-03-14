@@ -243,3 +243,5 @@ Paso 6: Guardar bitácora local o enviar por SMTP
 
 ---
 
+**Link video RPA**
+https://drive.google.com/file/d/1E0AFJCaA6pEeFw-8O1HUWS_yR25EAvP-/view?usp=sharing
