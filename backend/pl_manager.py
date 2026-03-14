@@ -79,13 +79,12 @@ porcentaje_afinidad(E, Porcentaje) :-
 nivel_urgencia(E, alta) :-
     sintoma_paciente(dolor_pecho, severo),
     enfermedad(E, _, respiratorio, _).
-
+ 
 nivel_urgencia(E, media) :-
     porcentaje_afinidad(E, P),
     P >= 60,
-    \\+ ( sintoma_paciente(dolor_pecho, severo),
-         enfermedad(E, _, respiratorio, _) ).
-
+    not((sintoma_paciente(dolor_pecho, severo), enfermedad(E, _, respiratorio, _))).
+ 
 nivel_urgencia(E, baja) :-
     porcentaje_afinidad(E, P),
     P < 60.
@@ -100,7 +99,7 @@ medicamento_inseguro(M) :-
 
 medicamento_seguro_para(E, M) :-
     trata(M, E),
-    \\+ medicamento_inseguro(M).
+    not(medicamento_inseguro(M)).
 
 sintomas_coincidentes(E, S) :-
     sintoma_paciente(S, _),

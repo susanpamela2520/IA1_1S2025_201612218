@@ -1,9 +1,15 @@
 %  MediLogic — Base de Conocimiento Médico (generado automáticamente)
-%  Actualizado: 2026-03-13 18:00:53
+%  Actualizado: 2026-03-13 17:43:12
 
 :- dynamic sintoma_paciente/2.
 :- dynamic alergia_paciente/1.
 :- dynamic condicion_paciente/1.
+
+
+:- discontiguous contraindicado_alergia/2.
+:- discontiguous contraindicado_condicion/2.
+:- discontiguous trata/2.
+:- discontiguous tiene_sintoma/3.
 
 % --- Catálogo de síntomas ---
 sintoma(congestion_nasal).
