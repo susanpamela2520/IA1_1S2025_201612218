@@ -1,9 +1,14 @@
 %  MediLogic — Base de Conocimiento Médico (generado automáticamente)
-%  Actualizado: 2026-03-13 18:00:53
+%  Actualizado: 2026-03-13 19:25:43
 
 :- dynamic sintoma_paciente/2.
 :- dynamic alergia_paciente/1.
 :- dynamic condicion_paciente/1.
+
+:- discontiguous contraindicado_alergia/2.
+:- discontiguous contraindicado_condicion/2.
+:- discontiguous trata/2.
+:- discontiguous tiene_sintoma/3.
 
 % --- Catálogo de síntomas ---
 sintoma(congestion_nasal).
@@ -16,6 +21,7 @@ sintoma(fatiga).
 sintoma(fiebre).
 sintoma(mareo).
 sintoma(nausea).
+sintoma(sangrado_nariz).
 sintoma(tos).
 sintoma(vomito).
 
@@ -75,13 +81,15 @@ trata(omeprazol, gastritis).
 trata(amoxicilina, sinusitis).
 trata(azitromicina, sinusitis).
 
-% --- Contraindicaciones ---
+% --- Contraindicaciones por alergia ---
 contraindicado_alergia(ibuprofeno, alergia_aines).
+contraindicado_alergia(antihistaminico, alergia_antihistaminicos).
+contraindicado_alergia(amoxicilina, alergia_penicilina).
+
+% --- Contraindicaciones por condicion cronica ---
 contraindicado_condicion(ibuprofeno, insuficiencia_renal).
 contraindicado_condicion(ibuprofeno, gastritis_cronica).
-contraindicado_alergia(antihistaminico, alergia_antihistaminicos).
 contraindicado_condicion(omeprazol, insuficiencia_hepatica).
-contraindicado_alergia(amoxicilina, alergia_penicilina).
 
 
 %REGLAS DE INFERENCIA 
@@ -124,13 +132,12 @@ porcentaje_afinidad(E, Porcentaje) :-
 nivel_urgencia(E, alta) :-
     sintoma_paciente(dolor_pecho, severo),
     enfermedad(E, _, respiratorio, _).
-
+ 
 nivel_urgencia(E, media) :-
     porcentaje_afinidad(E, P),
     P >= 60,
-    \+ ( sintoma_paciente(dolor_pecho, severo),
-         enfermedad(E, _, respiratorio, _) ).
-
+    not((sintoma_paciente(dolor_pecho, severo), enfermedad(E, _, respiratorio, _))).
+ 
 nivel_urgencia(E, baja) :-
     porcentaje_afinidad(E, P),
     P < 60.
@@ -145,7 +152,7 @@ medicamento_inseguro(M) :-
 
 medicamento_seguro_para(E, M) :-
     trata(M, E),
-    \+ medicamento_inseguro(M).
+    not(medicamento_inseguro(M)).
 
 sintomas_coincidentes(E, S) :-
     sintoma_paciente(S, _),

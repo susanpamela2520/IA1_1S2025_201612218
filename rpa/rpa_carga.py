@@ -240,7 +240,7 @@ def cargar_via_gui(enfermedades: list) -> list:
 
     #Envio de email
 
-    def enviar_email_bitacora(
+def enviar_email_bitacora(
     bitacora: list,
     destinatario: str,
     smtp_host: str = "smtp.gmail.com",
@@ -289,7 +289,7 @@ def _guardar_bitacora_local(bitacora: list) -> None:
     #Ejecutado linea de comandos 
 
 
-ef main():
+def main():
     parser = argparse.ArgumentParser(description="MediLogic RPA — Carga masiva de enfermedades")
     parser.add_argument("--archivo", default="rpa/input_ejemplo.txt",
                         help="Ruta al archivo .txt con las enfermedades a cargar")

@@ -119,7 +119,6 @@ diagnosticar(E, Porcentaje, Urgencia) :-
         self.sintomas_catalogo: List[str] = list(SINTOMAS_CATALOGO)
         self._parsear()
 
-
     def _parsear(self) -> None:
        #Lee archivo .pl para tener las enfermedades     
         if not os.path.exists(self.ruta_pl):
@@ -187,6 +186,11 @@ diagnosticar(E, Porcentaje, Urgencia) :-
             "\n:- dynamic sintoma_paciente/2.\n"
             ":- dynamic alergia_paciente/1.\n"
             ":- dynamic condicion_paciente/1.\n"
+            # Evita warnings si los hechos aparecen en orden no contiguo al regenerar
+            "\n:- discontiguous contraindicado_alergia/2.\n"
+            ":- discontiguous contraindicado_condicion/2.\n"
+            ":- discontiguous trata/2.\n"
+            ":- discontiguous tiene_sintoma/3.\n"
         )
 
         # Sección 2: Catálogo de síntomas
@@ -220,10 +224,15 @@ diagnosticar(E, Porcentaje, Urgencia) :-
                 lineas.append(f"trata({m.nombre}, {enf}).\n")
 
         # Sección 7: Contraindicaciones
-        lineas.append("\n% --- Contraindicaciones ---\n")
+        # Se escriben primero todas las alergias y luego todas las condiciones
+        # para evitar el warning "Clauses not together" de SWI-Prolog
+        lineas.append("\n% --- Contraindicaciones por alergia ---\n")
         for m in self.medicamentos.values():
             for a in m.contra_alergia:
                 lineas.append(f"contraindicado_alergia({m.nombre}, {a}).\n")
+
+        lineas.append("\n% --- Contraindicaciones por condicion cronica ---\n")
+        for m in self.medicamentos.values():
             for c in m.contra_condicion:
                 lineas.append(f"contraindicado_condicion({m.nombre}, {c}).\n")
 
@@ -254,7 +263,6 @@ diagnosticar(E, Porcentaje, Urgencia) :-
             if nombre in m.trata:
                 m.trata.remove(nombre)
 
-    
     #  Operaciones CRUD — Medicamentos
 
     def agregar_medicamento(self, m: Medicamento) -> None:

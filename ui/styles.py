@@ -1,7 +1,3 @@
-"""
-ui/styles.py — Estilos visuales de MediLogic
-Para cambiar colores de toda la app, solo edita PALETTE.
-"""
 from tkinter import ttk
 
 PALETTE = {
@@ -134,3 +130,6 @@ def aplicar_estilos(root):
                 thickness=16)
     s.configure("TEntry", padding=5)
     s.configure("TCombobox", padding=5)
+
+
+apply_styles = aplicar_estilos

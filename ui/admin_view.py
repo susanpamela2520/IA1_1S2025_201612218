@@ -166,7 +166,7 @@ class AdminView(ttk.Frame):
         self.tree_enf.selection_remove(*self.tree_enf.selection())
 
     def _editar_enfermedad(self):
-        """Guarda los datos del formulario a la enfermedad seleccionada (o crea una nueva)."""
+        """Guarda enfermedad en memoria, escribe el .pl y recarga Prolog."""
         nombre = self._enf_vars["enf_nombre"].get().strip().lower().replace(" ", "_")
         desc   = self._enf_vars["enf_desc"].get().strip()
         sistema= self._enf_vars["enf_sistema"].get()
@@ -190,8 +190,7 @@ class AdminView(ttk.Frame):
         else:
             self.mgr.agregar_enfermedad(nueva)
 
-        self._refresh_tree_enf()
-        self._refresh_list_trata()
+        # Guardar al disco y recargar motor
         self._guardar_y_recargar()
 
     def _eliminar_enfermedad(self):
@@ -347,7 +346,6 @@ class AdminView(ttk.Frame):
         else:
             self.mgr.agregar_medicamento(nuevo)
 
-        self._refresh_tree_med()
         self._guardar_y_recargar()
 
     def _eliminar_medicamento(self):
@@ -467,11 +465,8 @@ class AdminView(ttk.Frame):
         import shutil
         shutil.copy(ruta, self.pl_ruta)
         self.mgr = PLManager(self.pl_ruta)
+        self.mgr = PLManager(self.pl_ruta)
         self._guardar_y_recargar(silent=True)
-        self._refresh_tree_enf()
-        self._refresh_tree_med()
-        self._refresh_list_sint_cat()
-        self._refrescar_vista_pl()
         messagebox.showinfo("Listo", "Archivo .pl cargado y motor recargado.")
 
     def _exportar_pl(self):
@@ -486,28 +481,38 @@ class AdminView(ttk.Frame):
             messagebox.showinfo("Exportado", f"Archivo guardado en:\n{ruta}")
 
     def _guardar_y_recargar(self, silent=False):
-        # Paso 1: escribir el archivo .pl
+        # Paso 1: guardar .pl en disco
         try:
             self.mgr.guardar()
         except Exception as ex:
-            messagebox.showerror("Error al escribir .pl",
-                f"No se pudo guardar el archivo:\n{ex}")
+            messagebox.showerror("ERROR paso 1 - guardar disco",
+                f"Fallo al escribir el archivo:\n{ex}")
             return
-        # Paso 2: recargar el motor Prolog
+
+        # Paso 2: recargar Prolog (no detener flujo si falla)
         try:
             self.engine.recargar()
         except Exception as ex:
-            messagebox.showerror("Error al recargar Prolog",
-                f"El archivo se guardo pero Prolog reporto un error:\n{ex}\n\n"
-                f"Revisa la sintaxis en la pestana 'Archivo .pl'.")
-            self._refrescar_vista_pl()
-            return
-        # Todo OK
+            messagebox.showwarning("AVISO paso 2 - Prolog",
+                f"Archivo guardado OK. Prolog reporto:\n{ex}")
+
+        # Paso 3: DEBUG - mostrar que hay en mgr
+        n = len(self.mgr.enfermedades)
+        nombres = list(self.mgr.enfermedades.keys())
+        messagebox.showinfo("DEBUG enfermedades en mgr",
+            f"Total en memoria: {n}\nLista: {nombres}")
+
+        # Paso 4: refrescar UI
+        self._refresh_tree_enf()
+        self._refresh_tree_med()
+        self._refresh_list_trata()
+        self._refresh_list_sint_cat()
         self._refrescar_vista_pl()
+        self.update_idletasks()
+
         if not silent:
             messagebox.showinfo("Listo",
-                "Base de conocimiento guardada y motor Prolog recargado.")
-
+                "Guardado y recargado correctamente.")
 
 # ----------------------------------------------------------------
 #  Diálogo auxiliar para agregar síntoma con peso
